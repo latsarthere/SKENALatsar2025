@@ -6,8 +6,6 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -19,39 +17,41 @@ st.set_page_config(
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    .block-container { padding-top: 2rem; }
-    h1, h2, h3, h4, h5 { color: #0073C4; }
+    /* Mengatur padding utama agar tidak terlalu mepet ke atas */
+    .block-container {
+        padding-top: 2rem;
+    }
+    /* Warna header */
+    h1, h2, h3, h4, h5 {
+        color: #0073C4; /* Biru */
+    }
+    /* Tombol primer (Login, Scraping) */
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
-        background-color: #0073C4; color: white; border: none;
+        background-color: #0073C4;
+        color: white;
+        border: none;
     }
     div[data-testid="stButton"] > button[kind="primary"]:hover,
     div[data-testid="stForm"] > form > div > button:hover {
-        background-color: #005A9E; color: white;
+        background-color: #005A9E;
+        color: white;
     }
-    [data-testid="stSidebar"] { background-color: #f8f9fa; }
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #f8f9fa;
+    }
+    /* Notifikasi */
     .stAlert { border-radius: 5px; }
-    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
-    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
-    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
+    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; } /* Biru */
+    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; } /* Hijau */
+    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; } /* Oranye */
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# --- Fungsi Upload Google Drive ---
-def upload_to_drive(file_path, file_name, folder_id):
-    try:
-        gauth = GoogleAuth()
-        gauth.LocalWebserverAuth()
-        drive = GoogleDrive(gauth)
-        gfile = drive.CreateFile({'title': file_name, 'parents': [{'id': folder_id}]})
-        gfile.SetContentFile(file_path)
-        gfile.Upload()
-        return True, f"✅ File berhasil diupload ke Google Drive: {file_name}"
-    except Exception as e:
-        return False, f"❌ Gagal upload ke Google Drive: {e}"
 
-# --- FUNGSI PENDUKUNG ---
+# --- FUNGSI-FUNGSI PENDUKUNG ---
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
     try:
@@ -76,7 +76,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 
 def ambil_ringkasan(link):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(link, timeout=10, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -93,39 +93,37 @@ def ambil_ringkasan(link):
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
+    
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
-
+    
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
-
+    
     semua_hasil = []
-    df_partial = pd.DataFrame(columns=["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"])
-
-    for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
+    total_kategori = len(kata_kunci_lapus_dict)
+    
+    for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
-            status_placeholder.info(f"⏳ Memproses: {kategori} | Waktu: {int(elapsed_time // 60)}m {int(elapsed_time % 60)}d")
-
-            if pd.isna(keyword_raw): 
-                continue
+            status_placeholder.info(f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
+            
+            if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
-            if not keyword: 
-                continue
-
-            keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}'")
+            if not keyword: continue
+            
+            keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
+            
             search_query = f'"{keyword}" "{nama_daerah}"'
-
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     link = entry.link
-                    if any(d['Link'] == link for d in semua_hasil): 
-                        continue
+                    if any(d['Link'] == link for d in semua_hasil): continue
 
                     judul = entry.title
                     ringkasan = ambil_ringkasan(link)
-
+                    
                     judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
                     keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
@@ -136,34 +134,30 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
-
+                        
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1,
-                            "Kata Kunci": keyword,
-                            "Judul": judul,
-                            "Link": link,
-                            "Tanggal": tanggal_str,
-                            "Ringkasan": ringkasan
+                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
+                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
-
-                        # 🔹 Update live table tiap ada data baru
-                        df_partial = pd.DataFrame(semua_hasil)
-                        with table_placeholder.container():
-                            st.markdown("### Hasil Scraping Terkini")
-                            st.dataframe(df_partial, use_container_width=True, height=400)
-                            st.caption(f"Total berita ditemukan: {len(df_partial)}")
-
             except Exception:
                 continue
 
+        if semua_hasil:
+            df_live = pd.DataFrame(semua_hasil)
+            kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
+            df_live = df_live[kolom_urut]
+            with table_placeholder.container():
+                st.markdown("### Hasil Scraping Terkini")
+                st.dataframe(df_live, use_container_width=True, height=400)
+                st.caption(f"Total berita ditemukan: {len(df_live)}")
+
     status_placeholder.empty()
     keyword_placeholder.empty()
-
+    
     if semua_hasil:
         return pd.DataFrame(semua_hasil)
     else:
         return pd.DataFrame()
-
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
@@ -231,7 +225,7 @@ def show_documentation_page():
         st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
 
 def show_scraping_page():
-    st.title("⚙️ Halaman Scraping Data")
+    st.title(f"⚙️ Halaman Scraping Data")
     
     sub_page_options = ["Neraca", "Sosial", "Produksi"]
     st.session_state.sub_page = st.radio(
@@ -242,7 +236,6 @@ def show_scraping_page():
     )
     st.markdown("---")
     
-    # sementara hanya Neraca aktif
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         st.header("Segera Hadir!")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
@@ -257,7 +250,7 @@ def show_scraping_page():
         df_daerah = load_data_from_url(url_daerah)
 
     if df_lapus is None or df_daerah is None:
-        st.error("Gagal memuat data kata kunci.")
+        st.error("Gagal memuat data kata kunci. Aplikasi tidak dapat berjalan.")
         return
 
     st.success("✅ Data kata kunci berhasil dimuat.")
@@ -273,8 +266,10 @@ def show_scraping_page():
     start_date_input, end_date_input = None, None
     if triwulan_input == "Tanggal Custom":
         col1, col2 = st.columns(2)
-        start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="tgl_awal")
-        end_date_input = st.date_input("Tanggal Akhir", date.today(), key="tgl_akhir")
+        with col1:
+            start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30))
+        with col2:
+            end_date_input = st.date_input("Tanggal Akhir", date.today())
     
     opsi_kategori_list = ["Semua Kategori", "Pilih Kategori Tertentu"]
     mode_kategori = st.radio("Pilih Opsi Kategori:", opsi_kategori_list, horizontal=True)
@@ -300,6 +295,7 @@ def show_scraping_page():
             table_placeholder = st.empty()
             
             with table_placeholder.container():
+                st.markdown("### Hasil Scraping Terkini")
                 st.info("Menunggu hasil pertama ditemukan...")
             
             hasil_df = start_scraping(tanggal_awal, tanggal_akhir, df_lapus_untuk_proses, df_daerah, start_time, table_placeholder, keyword_placeholder)
@@ -308,43 +304,27 @@ def show_scraping_page():
             total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
 
             st.header("✅ Proses Selesai")
-            st.success(f"Scraping selesai dalam {total_duration_str}.")
+            st.success(f"Scraping telah selesai dalam {total_duration_str}.")
 
             if not hasil_df.empty:
-                # 🔹 Nama file ikut sub_page
-                timestamp = time.strftime('%Y%m%d-%H%M%S')
-                sub_page = st.session_state.sub_page
-                file_name = f"Hasil_Scraping_{sub_page}_{timestamp}.xlsx"
-
-                # 🔹 Simpan lokal
-                hasil_df.to_excel(file_name, index=False)
-                st.success(f"File otomatis tersimpan di server: `{file_name}`")
-
-                # 🔹 Upload ke Google Drive
-                folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
-                success, msg = upload_to_drive(file_name, file_name, folder_id)
-                if success: st.success(msg)
-                else: st.error(msg)
-
-                # 🔹 Tombol download manual
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
-
+                
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
                     data=output.getvalue(),
-                    file_name=file_name,
+                    file_name=f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
             else:
-                st.warning("Tidak ada berita ditemukan.")
+                st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
 
-            if st.button("🔄 Mulai Scraping Baru", use_container_width=True):
+            if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
                 st.rerun()
         else:
-            st.error("Rentang tanggal tidak valid.")
+            st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
 
