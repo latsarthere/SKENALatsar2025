@@ -165,7 +165,71 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     else:
         return pd.DataFrame()
 
-# --- HALAMAN-HALAMAN ---
+# --- HALAMAN-HALAMAN APLIKASI ---
+
+def show_home_page():
+    # --- [DIUBAH] Tata letak halaman Home menjadi lebih rapi ---
+    with st.container():
+        st.image("logo skena.png", width=200)
+        st.title("Sistem Scraping Fenomena Konawe Selatan")
+    
+    st.markdown("---")
+    
+    st.markdown("""
+    Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.
+    
+    _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu._
+    """)
+    
+    if not st.session_state.get('logged_in', False):
+        st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
+    
+    st.header("Pilih Kategori Data")
+    col1_btn, col2_btn, col3_btn = st.columns(3, gap="large")
+    is_disabled = not st.session_state.get('logged_in', False)
+    
+    with col1_btn:
+        st.subheader("👥 Sosial")
+        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
+        if st.button("Pilih Sosial", key="home_sosial", use_container_width=True, disabled=is_disabled):
+            st.session_state.page = "Scraping"; st.session_state.sub_page = "Sosial"; st.rerun()
+    with col2_btn:
+        st.subheader("📈 Neraca")
+        st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
+        if st.button("Pilih Neraca", key="home_neraca", use_container_width=True, disabled=is_disabled):
+            st.session_state.page = "Scraping"; st.session_state.sub_page = "Neraca"; st.rerun()
+    with col3_btn:
+        st.subheader("🌾 Produksi")
+        st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
+        if st.button("Pilih Produksi", key="home_produksi", use_container_width=True, disabled=is_disabled):
+            st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
+
+def show_pendahuluan_page():
+    st.title("📖 Pendahuluan")
+    st.markdown("---")
+    st.markdown("""
+    Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.
+
+    Aplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. 
+    Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet.
+    """)
+    if not st.session_state.get('logged_in', False):
+        st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
+
+def show_documentation_page():
+    st.title("🗂️ Dokumentasi")
+    st.markdown("Seluruh file, dataset, dan dokumentasi terkait proyek ini tersimpan di Google Drive.")
+    
+    folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
+    folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
+    st.link_button("Buka Google Drive", folder_url, use_container_width=True, type="primary")
+    
+    st.markdown("---")
+    
+    with st.expander("Tampilkan Pratinjau Folder di Sini"):
+        embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
+        st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
+
 def show_scraping_page():
     st.title("⚙️ Halaman Scraping Data")
     
