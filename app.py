@@ -5,6 +5,12 @@ import io
 import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
+
+# --- Import Pustaka Baru ---
+import google.generativeai as genai
+from newspaper import Article
+
+# --- Import Library PyGoogleNews ---
 from pygooglenews import GoogleNews
 
 # --- Konfigurasi Halaman Streamlit ---
@@ -17,15 +23,8 @@ st.set_page_config(
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    /* Mengatur padding utama agar tidak terlalu mepet ke atas */
-    .block-container {
-        padding-top: 2rem;
-    }
-    /* Warna header */
-    h1, h2, h3, h4, h5 {
-        color: #0073C4; /* Biru */
-    }
-    /* Tombol primer (Login, Scraping) */
+    .block-container { padding-top: 2rem; }
+    h1, h2, h3, h4, h5 { color: #0073C4; }
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
         background-color: #0073C4;
@@ -37,19 +36,14 @@ custom_css = """
         background-color: #005A9E;
         color: white;
     }
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-    }
-    /* Notifikasi */
+    [data-testid="stSidebar"] { background-color: #f8f9fa; }
     .stAlert { border-radius: 5px; }
-    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; } /* Biru */
-    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; } /* Hijau */
-    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; } /* Oranye */
+    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
+    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
+    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
-
 
 # --- FUNGSI-FUNGSI PENDUKUNG ---
 @st.cache_data
@@ -74,21 +68,25 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ambil_ringkasan(link):
+# --- [FUNGSI BARU] Fungsi untuk membuat ringkasan dengan AI Gemini ---
+@st.cache_data # Cache agar tidak meringkas artikel yang sama berulang kali
+def get_ai_summary(link):
+    """Mengambil teks artikel dan membuat ringkasan menggunakan AI."""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(link, timeout=10, headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'): return deskripsi['content']
-        og_desc = soup.find('meta', attrs={'property': 'og:description'})
-        if og_desc and og_desc.get('content'): return og_desc['content']
-        p_tag = soup.find('p')
-        if p_tag: return p_tag.get_text(strip=True)
-    except Exception:
-        return ""
-    return ""
+        article = Article(link)
+        article.download()
+        article.parse()
+        
+        if not article.text:
+            return "Gagal mengambil konten artikel."
+
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = f"Buat ringkasan singkat dalam 2-3 kalimat dari artikel berita berikut dalam Bahasa Indonesia:\n\n{article.text}"
+        response = model.generate_content(prompt)
+        
+        return response.text.strip()
+    except Exception as e:
+        return f"Error saat meringkas: {str(e)}"
 
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
@@ -112,8 +110,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             keyword = str(keyword_raw).strip()
             if not keyword: continue
             
-            keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
-            
             search_query = f'"{keyword}" "{nama_daerah}"'
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
@@ -122,7 +118,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     if any(d['Link'] == link for d in semua_hasil): continue
 
                     judul = entry.title
-                    ringkasan = ambil_ringkasan(link)
+                    
+                    # --- [DIUBAH] Menggunakan fungsi AI untuk ringkasan ---
+                    keyword_placeholder.text(f"  ➡️ 🤖 Meringkas berita: '{judul[:60]}...'")
+                    ringkasan = get_ai_summary(link)
                     
                     judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
@@ -162,7 +161,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 # --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home menjadi lebih rapi ---
     with st.container():
         st.image("logo skena.png", width=200)
         st.title("Sistem Scraping Fenomena Konawe Selatan")
@@ -242,6 +240,20 @@ def show_scraping_page():
         st.balloons()
         return
 
+    # --- [DIUBAH] Tambahkan input untuk API Key ---
+    st.subheader("Konfigurasi AI")
+    api_key = st.text_input("Masukkan Google Gemini API Key Anda", type="password", help="Dapatkan kunci dari aistudio.google.com")
+    
+    if api_key:
+        try:
+            genai.configure(api_key=api_key)
+            st.success("API Key berhasil dikonfigurasi.")
+        except Exception as e:
+            st.error(f"Gagal mengkonfigurasi API Key: {e}")
+            st.stop()
+            
+    st.markdown("---")
+
     url_lapus = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
     url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
 
@@ -278,7 +290,7 @@ def show_scraping_page():
     if mode_kategori == 'Pilih Kategori Tertentu':
         kategori_terpilih = st.multiselect('Pilih kategori untuk diproses:', options=original_categories)
 
-    is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
+    is_disabled = (not api_key or tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
     if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary", disabled=is_disabled):
         tahun_int = int(tahun_input)
