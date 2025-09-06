@@ -136,9 +136,15 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = "N/A"
                         
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
-                        })
+                            "Nomor": len(semua_hasil) + 1,
+                            "Kategori": kategori,   # ✅ Tambah kategori
+                            "Kata Kunci": keyword,
+                            "Judul": judul,
+                            "Link": link,
+                            "Tanggal": tanggal_str,
+                            "Ringkasan": ringkasan
+})
+
             except Exception:
                 continue
 
@@ -309,7 +315,13 @@ def show_scraping_page():
             if not hasil_df.empty:
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
+                    # Simpan hasil per kategori di sheet berbeda
+                    for kategori in hasil_df["Kategori"].unique():
+                        df_per_kategori = hasil_df[hasil_df["Kategori"] == kategori]
+                        # Pastikan nama sheet tidak lebih dari 31 karakter (batas Excel)
+                        sheet_name = str(kategori)[:31] if kategori else "Lainnya"
+                        df_per_kategori.to_excel(writer, sheet_name=sheet_name, index=False)
+
                 
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
