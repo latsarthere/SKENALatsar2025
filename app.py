@@ -6,6 +6,8 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -17,26 +19,17 @@ st.set_page_config(
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    .block-container {
-        padding-top: 2rem;
-    }
-    h1, h2, h3, h4, h5 {
-        color: #0073C4; /* Biru */
-    }
+    .block-container { padding-top: 2rem; }
+    h1, h2, h3, h4, h5 { color: #0073C4; }
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
-        background-color: #0073C4;
-        color: white;
-        border: none;
+        background-color: #0073C4; color: white; border: none;
     }
     div[data-testid="stButton"] > button[kind="primary"]:hover,
     div[data-testid="stForm"] > form > div > button:hover {
-        background-color: #005A9E;
-        color: white;
+        background-color: #005A9E; color: white;
     }
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-    }
+    [data-testid="stSidebar"] { background-color: #f8f9fa; }
     .stAlert { border-radius: 5px; }
     .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
@@ -45,8 +38,24 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
+# --- FUNGSI UPLOAD GOOGLE DRIVE ---
+def upload_to_drive(file_path, file_name, folder_id):
+    try:
+        gauth = GoogleAuth()
+        gauth.LocalWebserverAuth()
+        drive = GoogleDrive(gauth)
 
-# --- FUNGSI-FUNGSI PENDUKUNG ---
+        gfile = drive.CreateFile({
+            'title': file_name,
+            'parents': [{'id': folder_id}]
+        })
+        gfile.SetContentFile(file_path)
+        gfile.Upload()
+        return True, f"✅ File berhasil diupload ke Google Drive: {file_name}"
+    except Exception as e:
+        return False, f"❌ Gagal upload ke Google Drive: {e}"
+
+# --- FUNGSI PENDUKUNG ---
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
     try:
@@ -71,7 +80,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 
 def ambil_ringkasan(link):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(link, timeout=10, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -94,7 +103,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
-    
     semua_hasil = []
     
     for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
@@ -130,8 +138,12 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = "N/A"
                         
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
+                            "Nomor": len(semua_hasil) + 1,
+                            "Kata Kunci": keyword,
+                            "Judul": judul,
+                            "Link": link,
+                            "Tanggal": tanggal_str,
+                            "Ringkasan": ringkasan
                         })
             except Exception:
                 continue
@@ -153,72 +165,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     else:
         return pd.DataFrame()
 
-# --- HALAMAN-HALAMAN APLIKASI ---
-
-def show_home_page():
-    with st.container():
-        st.image("logo skena.png", width=200)
-        st.title("Sistem Scraping Fenomena Konawe Selatan")
-    
-    st.markdown("---")
-    
-    st.markdown("""
-    Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.
-    
-    _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu._
-    """)
-    
-    if not st.session_state.get('logged_in', False):
-        st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
-    
-    st.header("Pilih Kategori Data")
-    col1_btn, col2_btn, col3_btn = st.columns(3, gap="large")
-    is_disabled = not st.session_state.get('logged_in', False)
-    
-    with col1_btn:
-        st.subheader("👥 Sosial")
-        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
-        if st.button("Pilih Sosial", key="home_sosial", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Sosial"; st.rerun()
-    with col2_btn:
-        st.subheader("📈 Neraca")
-        st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
-        if st.button("Pilih Neraca", key="home_neraca", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Neraca"; st.rerun()
-    with col3_btn:
-        st.subheader("🌾 Produksi")
-        st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
-        if st.button("Pilih Produksi", key="home_produksi", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
-
-def show_pendahuluan_page():
-    st.title("📖 Pendahuluan")
-    st.markdown("---")
-    st.markdown("""
-    Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.
-
-    Aplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. 
-    Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet.
-    """)
-    if not st.session_state.get('logged_in', False):
-        st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
-
-def show_documentation_page():
-    st.title("🗂️ Dokumentasi")
-    st.markdown("Seluruh file, dataset, dan dokumentasi terkait proyek ini tersimpan di Google Drive.")
-    
-    folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
-    folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-    st.link_button("Buka Google Drive", folder_url, use_container_width=True, type="primary")
-    
-    st.markdown("---")
-    
-    with st.expander("Tampilkan Pratinjau Folder di Sini"):
-        embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
-        st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
-
+# --- HALAMAN-HALAMAN ---
 def show_scraping_page():
-    st.title(f"⚙️ Halaman Scraping Data")
+    st.title("⚙️ Halaman Scraping Data")
     
     sub_page_options = ["Neraca", "Sosial", "Produksi"]
     st.session_state.sub_page = st.radio(
@@ -229,6 +178,7 @@ def show_scraping_page():
     )
     st.markdown("---")
     
+    # sementara hanya Neraca aktif
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         st.header("Segera Hadir!")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
@@ -243,7 +193,7 @@ def show_scraping_page():
         df_daerah = load_data_from_url(url_daerah)
 
     if df_lapus is None or df_daerah is None:
-        st.error("Gagal memuat data kata kunci. Aplikasi tidak dapat berjalan.")
+        st.error("Gagal memuat data kata kunci.")
         return
 
     st.success("✅ Data kata kunci berhasil dimuat.")
@@ -259,10 +209,8 @@ def show_scraping_page():
     start_date_input, end_date_input = None, None
     if triwulan_input == "Tanggal Custom":
         col1, col2 = st.columns(2)
-        with col1:
-            start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30))
-        with col2:
-            end_date_input = st.date_input("Tanggal Akhir", date.today())
+        start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="tgl_awal")
+        end_date_input = st.date_input("Tanggal Akhir", date.today(), key="tgl_akhir")
     
     opsi_kategori_list = ["Semua Kategori", "Pilih Kategori Tertentu"]
     mode_kategori = st.radio("Pilih Opsi Kategori:", opsi_kategori_list, horizontal=True)
@@ -288,7 +236,6 @@ def show_scraping_page():
             table_placeholder = st.empty()
             
             with table_placeholder.container():
-                st.markdown("### Hasil Scraping Terkini")
                 st.info("Menunggu hasil pertama ditemukan...")
             
             hasil_df = start_scraping(tanggal_awal, tanggal_akhir, df_lapus_untuk_proses, df_daerah, start_time, table_placeholder, keyword_placeholder)
@@ -297,16 +244,25 @@ def show_scraping_page():
             total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
 
             st.header("✅ Proses Selesai")
-            st.success(f"Scraping telah selesai dalam {total_duration_str}.")
+            st.success(f"Scraping selesai dalam {total_duration_str}.")
 
             if not hasil_df.empty:
-                # 🔹 Simpan otomatis ke folder lokal server
-                file_name = f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx"
-                hasil_df.to_excel(file_name, index=False)
+                # 🔹 Nama file ikut sub_page
+                timestamp = time.strftime('%Y%m%d-%H%M%S')
+                sub_page = st.session_state.sub_page
+                file_name = f"Hasil_Scraping_{sub_page}_{timestamp}.xlsx"
 
+                # 🔹 Simpan lokal
+                hasil_df.to_excel(file_name, index=False)
                 st.success(f"File otomatis tersimpan di server: `{file_name}`")
 
-                # 🔹 Tetap sediakan tombol download manual
+                # 🔹 Upload ke Google Drive
+                folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
+                success, msg = upload_to_drive(file_name, file_name, folder_id)
+                if success: st.success(msg)
+                else: st.error(msg)
+
+                # 🔹 Tombol download manual
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
@@ -319,12 +275,12 @@ def show_scraping_page():
                     use_container_width=True
                 )
             else:
-                st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
+                st.warning("Tidak ada berita ditemukan.")
 
-            if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
+            if st.button("🔄 Mulai Scraping Baru", use_container_width=True):
                 st.rerun()
         else:
-            st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
+            st.error("Rentang tanggal tidak valid.")
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
 
