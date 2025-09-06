@@ -4,5 +4,3 @@ requests
 beautifulsoup4
 openpyxl
 pygooglenews
-newspaper3k
-google-generativeai
