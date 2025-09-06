@@ -38,17 +38,13 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# --- FUNGSI UPLOAD GOOGLE DRIVE ---
+# --- Fungsi Upload Google Drive ---
 def upload_to_drive(file_path, file_name, folder_id):
     try:
         gauth = GoogleAuth()
         gauth.LocalWebserverAuth()
         drive = GoogleDrive(gauth)
-
-        gfile = drive.CreateFile({
-            'title': file_name,
-            'parents': [{'id': folder_id}]
-        })
+        gfile = drive.CreateFile({'title': file_name, 'parents': [{'id': folder_id}]})
         gfile.SetContentFile(file_path)
         gfile.Upload()
         return True, f"✅ File berhasil diupload ke Google Drive: {file_name}"
@@ -97,35 +93,39 @@ def ambil_ringkasan(link):
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
-    
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
-    
+
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
+
     semua_hasil = []
-    
+    df_partial = pd.DataFrame(columns=["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"])
+
     for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
             status_placeholder.info(f"⏳ Memproses: {kategori} | Waktu: {int(elapsed_time // 60)}m {int(elapsed_time % 60)}d")
-            
-            if pd.isna(keyword_raw): continue
+
+            if pd.isna(keyword_raw): 
+                continue
             keyword = str(keyword_raw).strip()
-            if not keyword: continue
-            
+            if not keyword: 
+                continue
+
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}'")
-            
             search_query = f'"{keyword}" "{nama_daerah}"'
+
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     link = entry.link
-                    if any(d['Link'] == link for d in semua_hasil): continue
+                    if any(d['Link'] == link for d in semua_hasil): 
+                        continue
 
                     judul = entry.title
                     ringkasan = ambil_ringkasan(link)
-                    
+
                     judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
                     keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
@@ -136,7 +136,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
-                        
+
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1,
                             "Kata Kunci": keyword,
@@ -145,25 +145,25 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             "Tanggal": tanggal_str,
                             "Ringkasan": ringkasan
                         })
+
+                        # 🔹 Update live table tiap ada data baru
+                        df_partial = pd.DataFrame(semua_hasil)
+                        with table_placeholder.container():
+                            st.markdown("### Hasil Scraping Terkini")
+                            st.dataframe(df_partial, use_container_width=True, height=400)
+                            st.caption(f"Total berita ditemukan: {len(df_partial)}")
+
             except Exception:
                 continue
 
-        if semua_hasil:
-            df_live = pd.DataFrame(semua_hasil)
-            kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
-            df_live = df_live[kolom_urut]
-            with table_placeholder.container():
-                st.markdown("### Hasil Scraping Terkini")
-                st.dataframe(df_live, use_container_width=True, height=400)
-                st.caption(f"Total berita ditemukan: {len(df_live)}")
-
     status_placeholder.empty()
     keyword_placeholder.empty()
-    
+
     if semua_hasil:
         return pd.DataFrame(semua_hasil)
     else:
         return pd.DataFrame()
+
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
