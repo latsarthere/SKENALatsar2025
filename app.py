@@ -8,7 +8,6 @@ from datetime import date, datetime, timedelta
 
 # --- Import Pustaka Baru ---
 import google.generativeai as genai
-from newspaper import Article
 
 # --- Import Library PyGoogleNews ---
 from pygooglenews import GoogleNews
@@ -69,21 +68,25 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     return triwulan_map.get(triwulan, (None, None))
 
 # --- [FUNGSI BARU] Fungsi untuk membuat ringkasan dengan AI Gemini ---
-@st.cache_data # Cache agar tidak meringkas artikel yang sama berulang kali
+@st.cache_data
 def get_ai_summary(link):
-    """Mengambil teks artikel dan membuat ringkasan menggunakan AI."""
+    """Mengambil teks artikel dan membuat ringkasan menggunakan AI (tanpa newspaper3k)."""
     try:
-        article = Article(link)
-        article.download()
-        article.parse()
-        
-        if not article.text:
+        response = requests.get(link, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Gabungkan semua teks <p>
+        paragraphs = [p.get_text() for p in soup.find_all("p")]
+        article_text = " ".join(paragraphs)
+
+        if not article_text.strip():
             return "Gagal mengambil konten artikel."
 
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"Buat ringkasan singkat dalam 2-3 kalimat dari artikel berita berikut dalam Bahasa Indonesia:\n\n{article.text}"
+        prompt = f"Buat ringkasan singkat dalam 2-3 kalimat dari artikel berita berikut dalam Bahasa Indonesia:\n\n{article_text}"
         response = model.generate_content(prompt)
-        
+
         return response.text.strip()
     except Exception as e:
         return f"Error saat meringkas: {str(e)}"
@@ -159,7 +162,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
         return pd.DataFrame()
 
 # --- HALAMAN-HALAMAN APLIKASI ---
-
 def show_home_page():
     with st.container():
         st.image("logo skena.png", width=200)
@@ -339,8 +341,6 @@ def show_scraping_page():
             st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
-
-# Inisialisasi Session State
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 if "logged_in" not in st.session_state:
@@ -358,44 +358,4 @@ with st.sidebar:
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login", use_container_width=True, type="primary"):
-                if username == "user7405" and password == "bps7405":
-                    st.session_state.logged_in = True
-                    st.session_state.page = "Home"
-                    st.rerun()
-                else:
-                    st.warning("Username atau password salah. Hubungi admin untuk bantuan.")
-    else:
-        st.success(f"Selamat datang, **user7405**!")
-        if st.button("Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.page = "Home"
-            st.rerun()
-
-    st.markdown("---")
-    st.header("Menu Navigasi")
-    
-    if st.button("🏠 Home", use_container_width=True):
-        st.session_state.page = "Home"; st.rerun()
-        
-    if st.button("📖 Pendahuluan", use_container_width=True):
-        st.session_state.page = "Pendahuluan"; st.rerun()
-
-    if st.session_state.logged_in:
-        if st.button("⚙️ Scraping", use_container_width=True):
-            st.session_state.page = "Scraping"; st.rerun()
-        
-        if st.button("🗂️ Dokumentasi", use_container_width=True):
-            st.session_state.page = "Dokumentasi"; st.rerun()
-
-# --- Logika Tampilan Halaman ---
-if st.session_state.page == "Home":
-    show_home_page()
-elif st.session_state.page == "Pendahuluan":
-    show_pendahuluan_page()
-elif st.session_state.page == "Scraping" and st.session_state.logged_in:
-    show_scraping_page()
-elif st.session_state.page == "Dokumentasi" and st.session_state.logged_in:
-    show_documentation_page()
-else:
-    st.session_state.page = "Home"
-    st.rerun()
+                if
