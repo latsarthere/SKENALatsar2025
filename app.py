@@ -300,14 +300,21 @@ def show_scraping_page():
             st.success(f"Scraping telah selesai dalam {total_duration_str}.")
 
             if not hasil_df.empty:
+                # 🔹 Simpan otomatis ke folder lokal server
+                file_name = f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx"
+                hasil_df.to_excel(file_name, index=False)
+
+                st.success(f"File otomatis tersimpan di server: `{file_name}`")
+
+                # 🔹 Tetap sediakan tombol download manual
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
-                
+
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
                     data=output.getvalue(),
-                    file_name=f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx",
+                    file_name=file_name,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
