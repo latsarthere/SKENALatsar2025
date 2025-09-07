@@ -35,20 +35,6 @@ custom_css = """
     
     /* Class untuk perataan teks */
     .text-center { text-align: center; }
-    /* Gaya untuk tombol Pendahuluan yang baru */
-    .link-button-style {
-        background: none!important;
-        border: none;
-        padding: 0!important;
-        color: #0073C4 !important; /* Warna biru untuk link */
-        text-decoration: underline;
-        cursor: pointer;
-        font-size: inherit; /* Menggunakan ukuran font dari paragraf */
-    }
-    .link-button-style:hover {
-        color: #005A9E !important;
-        text-decoration: underline;
-    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -166,38 +152,32 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
+# --- [BARU] Fungsi callback untuk pindah halaman ---
 def set_page(page_name):
     st.session_state.page = page_name
-    st.rerun() # Tambahkan rerun agar perubahan halaman langsung terlihat
 
 def show_home_page():
-    # --- [DIUBAH] Logo dan judul diganti dengan 'logo skena full.png' ---
-    col1, col2, col3 = st.columns([1, 4, 1]) # Sesuaikan lebar kolom jika perlu
-    with col2:
-        st.image("logo skena full.png", use_container_width=True) # Menggunakan use_container_width agar responsif
-
-    st.markdown("---")
-
-    st.markdown("""
-        <div style='text-align: center;'>
-            Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
-            Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google. 
-        </div>
-    """, unsafe_allow_html=True)
+    with st.container():
+        st.image("logo skena full.png", use_container_width=True)
     
-    # --- [DIUBAH] Hanya kata "Pendahuluan" yang jadi link/tombol ---
+    st.markdown("---")
+    
+    # --- [DIUBAH] Teks pengantar baru dan perataan ---
     st.markdown("""
-        <div style='text-align: center; margin-top: 10px;'>
-            Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian 
-            <button class='link-button-style' onclick="streamlit.setComponentValue('set_pendahuluan_page', true)">Pendahuluan</button> 
-            terlebih dahulu.
-        </div>
+    <div class='text-center'>
+    Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
+    Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google.
+    </div>
     """, unsafe_allow_html=True)
-    # Handle the click event for "Pendahuluan" link
-    if st.session_state.get('set_pendahuluan_page', False):
-        set_page("Pendahuluan")
-        st.session_state['set_pendahuluan_page'] = False # Reset state
 
+    # --- [DIUBAH] Membuat tombol "Pendahuluan" yang bisa diklik ---
+    # Kita gunakan kolom agar bisa meletakkan tombol di tengah
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        # Tombol ini akan menjalankan fungsi set_page("Pendahuluan") saat diklik
+        if st.button("Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu.", use_container_width=True):
+            set_page("Pendahuluan")
+            st.rerun() # Panggil rerun agar halaman langsung berganti
 
     if not st.session_state.get('logged_in', False):
         st.markdown("<div class='text-center' style='margin-top: 1rem;'>", unsafe_allow_html=True)
@@ -393,17 +373,17 @@ with st.sidebar:
     st.header("Menu Navigasi")
     
     if st.button("🏠 Home", use_container_width=True):
-        set_page("Home")
+        set_page("Home"); st.rerun()
         
     if st.button("📖 Pendahuluan", use_container_width=True):
-        set_page("Pendahuluan")
+        set_page("Pendahuluan"); st.rerun()
 
     if st.session_state.logged_in:
         if st.button("⚙️ Scraping", use_container_width=True):
-            set_page("Scraping")
+            set_page("Scraping"); st.rerun()
         
         if st.button("🗂️ Dokumentasi", use_container_width=True):
-            set_page("Dokumentasi")
+            set_page("Dokumentasi"); st.rerun()
 
 if st.session_state.page == "Home":
     show_home_page()
