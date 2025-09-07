@@ -318,10 +318,19 @@ def show_scraping_page():
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
                 
+                # --- [BAGIAN YANG DIUBAH] ---
+                kategori_file = st.session_state.sub_page
+                periode_file = triwulan_input.replace(' ', '_') # Ganti spasi dengan underscore
+                tahun_file = tahun_input
+                tanggal_running = time.strftime('%Y%m%d')
+                jam_running = time.strftime('%H%M%S')
+                
+                nama_file_baru = f"Hasil Scraping_{kategori_file}_{periode_file}_{tahun_file}_{tanggal_running}_{jam_running}.xlsx"
+                
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
                     data=output.getvalue(),
-                    file_name=f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx",
+                    file_name=nama_file_baru, # Menggunakan nama file yang baru
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
