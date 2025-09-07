@@ -76,7 +76,6 @@ def ambil_ringkasan(link):
         return ""
     return ""
 
-# --- [DIUBAH] Menambahkan "Kategori" ke dalam hasil ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
@@ -124,7 +123,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         
                         st.session_state.hasil_scraping.append({
                             "Nomor": len(st.session_state.hasil_scraping) + 1,
-                            "Kategori": kategori, # <-- Kolom baru ditambahkan di sini
+                            "Kategori": kategori,
                             "Kata Kunci": keyword, "Judul": judul,
                             "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
@@ -133,7 +132,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"] # <-- Urutan kolom diperbarui
+            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
@@ -151,9 +150,11 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 # --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
-    with st.container():
-        st.image("logo skena.png", width=200)
-        st.title("Sistem Scraping Fenomena Konawe Selatan")
+    # --- [DIUBAH] Tata letak halaman Home menjadi center ---
+    col1, col2, col3 = st.columns([1, 2, 1]) # Membuat kolom kosong di sisi kiri dan kanan
+    with col2:
+        st.image("logo skena.png", use_column_width=True)
+        st.markdown("<h1 style='text-align: center;'>Sistem Scraping Fenomena Konawe Selatan</h1>", unsafe_allow_html=True)
     
     st.markdown("---")
     
