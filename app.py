@@ -281,7 +281,13 @@ def show_scraping_page():
     
     kategori_terpilih = []
     if mode_kategori == 'Pilih Kategori Tertentu':
-        kategori_terpilih = st.multiselect('Pilih kategori untuk diproses:', options=original_categories)
+        # --- [BAGIAN YANG DIUBAH] ---
+        kategori_terpilih = st.multiselect(
+            'Pilih kategori untuk diproses:',
+            options=original_categories,
+            max_selections=5  # Menambahkan batasan maksimal 5 pilihan
+        )
+        st.caption("Catatan: Anda hanya dapat memilih maksimal 5 kategori.")
 
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
@@ -318,9 +324,8 @@ def show_scraping_page():
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
                 
-                # --- [BAGIAN YANG DIUBAH] ---
                 kategori_file = st.session_state.sub_page
-                periode_file = triwulan_input.replace(' ', '_') # Ganti spasi dengan underscore
+                periode_file = triwulan_input.replace(' ', '_')
                 tahun_file = tahun_input
                 tanggal_running = time.strftime('%Y%m%d')
                 jam_running = time.strftime('%H%M%S')
@@ -330,7 +335,7 @@ def show_scraping_page():
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
                     data=output.getvalue(),
-                    file_name=nama_file_baru, # Menggunakan nama file yang baru
+                    file_name=nama_file_baru,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
