@@ -150,11 +150,11 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 # --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home menjadi center ---
+    # --- [DIUBAH] Tata letak halaman Home menjadi center, ukuran logo dan judul disesuaikan ---
     col1, col2, col3 = st.columns([1, 2, 1]) # Membuat kolom kosong di sisi kiri dan kanan
     with col2:
-        st.image("logo skena.png", use_column_width=True)
-        st.markdown("<h1 style='text-align: center;'>Sistem Scraping Fenomena Konawe Selatan</h1>", unsafe_allow_html=True)
+        st.image("logo skena.png", width=150) # Mengurangi ukuran logo
+        st.markdown("<h2 style='text-align: center; color: #0073C4;'>Sistem Scraping Fenomena Konawe Selatan</h2>", unsafe_allow_html=True) # Menggunakan h2 untuk judul yang lebih kecil
     
     st.markdown("---")
     
