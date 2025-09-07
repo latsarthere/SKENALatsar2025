@@ -32,6 +32,9 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
+    
+    /* Class untuk perataan teks */
+    .text-center { text-align: center; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -153,26 +156,34 @@ def set_page(page_name):
     st.session_state.page = page_name
 
 def show_home_page():
-    with st.container():
-        st.image("logo skena.png", width=200)
-        st.title("Sistem Scraping Fenomena Konawe Selatan")
+    # --- [DIUBAH] Menggunakan gambar logo skena full.png ---
+    st.image("logo skena full.png", use_container_width=True)
     
     st.markdown("---")
     
+    # --- [DIUBAH] Teks pengantar menjadi center ---
     st.markdown("""
-    Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
-    Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google.
-    """)
+    <div class='text-center'>
+        Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
+        Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google.
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Tombol untuk pindah ke halaman Pendahuluan
-    if st.button("Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu."):
-        set_page("Pendahuluan")
-        st.rerun()
+    # --- [DIUBAH] Tombol Pendahuluan menjadi center ---
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu.", use_container_width=True):
+            set_page("Pendahuluan")
+            st.rerun()
 
     if not st.session_state.get('logged_in', False):
+        # --- [DIUBAH] Info Login menjadi center ---
+        st.markdown("<div class='text-center' style='margin-top: 1rem;'>", unsafe_allow_html=True)
         st.info("Silakan Login melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    st.header("Pilih Kategori Data")
+    # --- [DIUBAH] Judul "Pilih Kategori Data" menjadi center ---
+    st.markdown("<h2 class='text-center' style='margin-top: 2rem;'>Pilih Kategori Data</h2>", unsafe_allow_html=True)
     
     col1_btn, col2_btn, col3_btn, col4_btn = st.columns(4, gap="large")
     is_disabled = not st.session_state.get('logged_in', False)
