@@ -33,8 +33,22 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
     
-    /* [BARU] Class untuk perataan teks */
+    /* Class untuk perataan teks */
     .text-center { text-align: center; }
+    /* Gaya untuk tombol Pendahuluan yang baru */
+    .link-button-style {
+        background: none!important;
+        border: none;
+        padding: 0!important;
+        color: #0073C4 !important; /* Warna biru untuk link */
+        text-decoration: underline;
+        cursor: pointer;
+        font-size: inherit; /* Menggunakan ukuran font dari paragraf */
+    }
+    .link-button-style:hover {
+        color: #005A9E !important;
+        text-decoration: underline;
+    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -152,21 +166,18 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
-# --- [DIUBAH] Fungsi baru untuk navigasi ---
 def set_page(page_name):
     st.session_state.page = page_name
+    st.rerun() # Tambahkan rerun agar perubahan halaman langsung terlihat
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home ---
-    col_img, col_text = st.columns([1, 4])
-    with col_img:
-        st.image("logo skena.png", width=100)
-    with col_text:
-        st.markdown("<h1 style='color: #0073C4; vertical-align: middle;'>Sistem Scraping Fenomena Konawe Selatan</h1>", unsafe_allow_html=True)
+    # --- [DIUBAH] Logo dan judul diganti dengan 'logo skena full.png' ---
+    col1, col2, col3 = st.columns([1, 4, 1]) # Sesuaikan lebar kolom jika perlu
+    with col2:
+        st.image("logo skena full.png", use_container_width=True) # Menggunakan use_container_width agar responsif
 
     st.markdown("---")
 
-    # --- [DIUBAH] Teks pengantar baru ---
     st.markdown("""
         <div style='text-align: center;'>
             Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
@@ -174,10 +185,19 @@ def show_home_page():
         </div>
     """, unsafe_allow_html=True)
     
-    # --- [DIUBAH] Membuat tombol "Pendahuluan" yang bisa diklik ---
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.button("Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu.", on_click=set_page, args=("Pendahuluan",), use_container_width=True)
+    # --- [DIUBAH] Hanya kata "Pendahuluan" yang jadi link/tombol ---
+    st.markdown("""
+        <div style='text-align: center; margin-top: 10px;'>
+            Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian 
+            <button class='link-button-style' onclick="streamlit.setComponentValue('set_pendahuluan_page', true)">Pendahuluan</button> 
+            terlebih dahulu.
+        </div>
+    """, unsafe_allow_html=True)
+    # Handle the click event for "Pendahuluan" link
+    if st.session_state.get('set_pendahuluan_page', False):
+        set_page("Pendahuluan")
+        st.session_state['set_pendahuluan_page'] = False # Reset state
+
 
     if not st.session_state.get('logged_in', False):
         st.markdown("<div class='text-center' style='margin-top: 1rem;'>", unsafe_allow_html=True)
