@@ -33,7 +33,6 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
     
-    /* Class untuk perataan teks */
     .text-center { text-align: center; }
 </style>
 """
@@ -152,32 +151,43 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
-# --- [BARU] Fungsi callback untuk pindah halaman ---
 def set_page(page_name):
     st.session_state.page = page_name
 
 def show_home_page():
-    with st.container():
-        st.image("logo skena full.png", use_container_width=True)
-    
+    # --- [DIUBAH] Tata letak halaman Home ---
+    col_img, col_text = st.columns([1, 4])
+    with col_img:
+        st.image("logo skena.png", width=100)
+    with col_text:
+        st.markdown("<h1 style='color: #0073C4; vertical-align: middle;'>Sistem Scraping Fenomena Konawe Selatan</h1>", unsafe_allow_html=True)
+
     st.markdown("---")
-    
-    # --- [DIUBAH] Teks pengantar baru dan perataan ---
+
+    # --- [DIUBAH] Teks pengantar baru ---
     st.markdown("""
     <div class='text-center'>
-    Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
-    Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google.
+        Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
+        Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google.
     </div>
     """, unsafe_allow_html=True)
-
+    
     # --- [DIUBAH] Membuat tombol "Pendahuluan" yang bisa diklik ---
-    # Kita gunakan kolom agar bisa meletakkan tombol di tengah
-    col1, col2, col3 = st.columns([1,2,1])
+    # Kita gunakan kolom untuk meletakkan teks dan tombol di tengah
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Tombol ini akan menjalankan fungsi set_page("Pendahuluan") saat diklik
-        if st.button("Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu.", use_container_width=True):
+        # Menampilkan teks dalam satu baris dengan tombol di antaranya
+        st.markdown("""
+        <div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;">
+            <span style="margin-right: 5px;">Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian</span>
+        """, unsafe_allow_html=True)
+        if st.button("Pendahuluan", key="link_pendahuluan"):
             set_page("Pendahuluan")
-            st.rerun() # Panggil rerun agar halaman langsung berganti
+            st.rerun()
+        st.markdown("""
+            <span style="margin-left: 5px;">terlebih dahulu.</span>
+        </div>
+        """, unsafe_allow_html=True)
 
     if not st.session_state.get('logged_in', False):
         st.markdown("<div class='text-center' style='margin-top: 1rem;'>", unsafe_allow_html=True)
