@@ -32,6 +32,9 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
+    
+    /* [BARU] Class untuk perataan teks */
+    .text-center { text-align: center; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -150,42 +153,56 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 # --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home menjadi center, ukuran logo dan judul disesuaikan ---
-    col1, col2, col3 = st.columns([1, 2, 1]) # Membuat kolom kosong di sisi kiri dan kanan
-    with col2:
-        st.image("logo skena.png", width=150) # Mengurangi ukuran logo
-        st.markdown("<h2 style='text-align: center; color: #0073C4;'>Sistem Scraping Fenomena Konawe Selatan</h2>", unsafe_allow_html=True) # Menggunakan h2 untuk judul yang lebih kecil
+    # --- [DIUBAH] Tata letak halaman Home ---
+    with st.container():
+        st.markdown("<div class='text-center'>", unsafe_allow_html=True)
+        st.image("logo skena.png", width=200)
+        st.title("Sistem Scraping Fenomena Konawe Selatan")
+        st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown("---")
     
+    # --- [DIUBAH] Teks pengantar baru dan perataan ---
     st.markdown("""
-    Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.
-    
-    _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu._
-    """)
+    <div class='text-center'>
+    Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
+    Sistem ini melakukan pencarian (<i>scraping</i>) fenomena pendukung dalam bentuk berita di Google. 
+    Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <b>Pendahuluan</b> terlebih dahulu.
+    </div>
+    """, unsafe_allow_html=True)
     
     if not st.session_state.get('logged_in', False):
-        st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
+        st.markdown("<div class='text-center' style='margin-top: 20px;'>", unsafe_allow_html=True)
+        st.info("Silakan Login melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    st.header("Pilih Kategori Data")
-    col1_btn, col2_btn, col3_btn = st.columns(3, gap="large")
+    st.markdown("<h2 class='text-center' style='margin-top: 40px;'>Pilih Kategori Data</h2>", unsafe_allow_html=True)
+    
+    # --- [DIUBAH] Penambahan kategori "Lainnya" ---
+    col1_btn, col2_btn, col3_btn, col4_btn = st.columns(4, gap="large")
     is_disabled = not st.session_state.get('logged_in', False)
     
     with col1_btn:
-        st.subheader("👥 Sosial")
-        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
-        if st.button("Pilih Sosial", key="home_sosial", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Sosial"; st.rerun()
-    with col2_btn:
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
         if st.button("Pilih Neraca", key="home_neraca", use_container_width=True, disabled=is_disabled):
             st.session_state.page = "Scraping"; st.session_state.sub_page = "Neraca"; st.rerun()
+    with col2_btn:
+        st.subheader("👥 Sosial")
+        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
+        if st.button("Pilih Sosial", key="home_sosial", use_container_width=True, disabled=is_disabled):
+            st.session_state.page = "Scraping"; st.session_state.sub_page = "Sosial"; st.rerun()
     with col3_btn:
         st.subheader("🌾 Produksi")
         st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
         if st.button("Pilih Produksi", key="home_produksi", use_container_width=True, disabled=is_disabled):
             st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
+    with col4_btn:
+        st.subheader("📑 Lainnya")
+        st.write("Kategori lain yang belum terdefinisi secara spesifik.")
+        if st.button("Pilih Lainnya", key="home_lainnya", use_container_width=True, disabled=is_disabled):
+            st.session_state.page = "Scraping"; st.session_state.sub_page = "Lainnya"; st.rerun()
+
 
 def show_pendahuluan_page():
     st.title("📖 Pendahuluan")
@@ -216,7 +233,8 @@ def show_documentation_page():
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
     
-    sub_page_options = ["Neraca", "Sosial", "Produksi"]
+    # --- [DIUBAH] Penambahan kategori "Lainnya" ---
+    sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
     st.session_state.sub_page = st.radio(
         "Pilih Kategori Data:",
         sub_page_options,
@@ -225,7 +243,7 @@ def show_scraping_page():
     )
     st.markdown("---")
     
-    if st.session_state.sub_page in ["Sosial", "Produksi"]:
+    if st.session_state.sub_page in ["Sosial", "Produksi", "Lainnya"]:
         st.header("Segera Hadir!")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
