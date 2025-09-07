@@ -76,29 +76,32 @@ def ambil_ringkasan(link):
         return ""
     return ""
 
-def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
+def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder, status_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
     
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
     
-    status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
     
-    # --- [DIUBAH] Gunakan session_state untuk menyimpan hasil ---
     if 'hasil_scraping' not in st.session_state:
         st.session_state.hasil_scraping = []
     
+    total_kategori = len(kata_kunci_lapus_dict)
+    kategori_ke = 0
+    
     for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
+        kategori_ke += 1
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
-            status_placeholder.info(f"⏳ Memproses: {kategori} | Waktu: {int(elapsed_time // 60)}m {int(elapsed_time % 60)}d")
             
             if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
             if not keyword: continue
             
+            # --- [DIUBAH] Pindahkan status ke bawah tabel ---
+            status_placeholder.info(f"⏳ Memproses Kategori {kategori_ke}/{total_kategori}: {kategori} | Waktu: {int(elapsed_time // 60)}m {int(elapsed_time % 60)}d")
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}'")
             
             search_query = f'"{keyword}" "{nama_daerah}"'
@@ -106,7 +109,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     link = entry.link
-                    # Cek duplikat berdasarkan link di session_state
                     if any(d['Link'] == link for d in st.session_state.hasil_scraping): continue
 
                     judul = entry.title
@@ -123,18 +125,18 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
                         
-                        # --- [DIUBAH] Simpan hasil ke session_state ---
                         st.session_state.hasil_scraping.append({
-                            "Nomor": len(st.session_state.hasil_scraping) + 1, "Kata Kunci": keyword, "Judul": judul,
+                            "Nomor": len(st.session_state.hasil_scraping) + 1,
+                            "Kategori": kategori, # <-- [BARU] Kolom kategori ditambahkan
+                            "Kata Kunci": keyword, "Judul": judul,
                             "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
             except Exception:
                 continue
 
-        # --- [DIUBAH] Update tabel dari session_state ---
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
+            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"] # <-- [BARU]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
@@ -144,7 +146,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     status_placeholder.empty()
     keyword_placeholder.empty()
     
-    # Kembalikan hasil dari session_state
     if st.session_state.hasil_scraping:
         return pd.DataFrame(st.session_state.hasil_scraping)
     else:
@@ -270,8 +271,14 @@ def show_scraping_page():
 
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
+    st.markdown("---")
+    
+    # --- [DIUBAH] Tampilkan tabel kosong di awal ---
+    st.header("Hasil Scraping")
+    kolom_kosong = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
+    table_placeholder = st.dataframe(pd.DataFrame(columns=kolom_kosong), use_container_width=True, height=400)
+    
     if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary", disabled=is_disabled):
-        # --- [DIUBAH] Reset session_state setiap kali scraping baru dimulai ---
         st.session_state.hasil_scraping = []
         
         tahun_int = int(tahun_input)
@@ -281,17 +288,13 @@ def show_scraping_page():
             start_time = time.time()
             df_lapus_untuk_proses = df_lapus[kategori_terpilih] if mode_kategori == 'Pilih Kategori Tertentu' else df_lapus
             
+            # --- [DIUBAH] Tempat untuk notifikasi proses ---
             st.markdown("---")
-            st.header("Proses & Hasil Scraping")
-            
+            st.subheader("Status Proses")
+            status_placeholder = st.empty()
             keyword_placeholder = st.empty()
-            table_placeholder = st.empty()
             
-            with table_placeholder.container():
-                st.markdown("### Hasil Scraping Terkini")
-                st.info("Menunggu hasil pertama ditemukan...")
-            
-            hasil_df = start_scraping(tanggal_awal, tanggal_akhir, df_lapus_untuk_proses, df_daerah, start_time, table_placeholder, keyword_placeholder)
+            hasil_df = start_scraping(tanggal_awal, tanggal_akhir, df_lapus_untuk_proses, df_daerah, start_time, table_placeholder, keyword_placeholder, status_placeholder)
             
             end_time = time.time()
             total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
@@ -315,7 +318,6 @@ def show_scraping_page():
                 st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
 
             if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
-                # Hapus hasil lama dan rerun
                 if 'hasil_scraping' in st.session_state:
                     del st.session_state.hasil_scraping
                 st.rerun()
@@ -323,8 +325,7 @@ def show_scraping_page():
             st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
-
-# Inisialisasi Session State
+# (Tidak ada perubahan di sini)
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 if "logged_in" not in st.session_state:
@@ -332,7 +333,6 @@ if "logged_in" not in st.session_state:
 if "sub_page" not in st.session_state:
     st.session_state.sub_page = "Neraca"
 
-# --- Sidebar ---
 with st.sidebar:
     st.image("logo bps konsel.png")
     
@@ -371,7 +371,6 @@ with st.sidebar:
         if st.button("🗂️ Dokumentasi", use_container_width=True):
             st.session_state.page = "Dokumentasi"; st.rerun()
 
-# --- Logika Tampilan Halaman ---
 if st.session_state.page == "Home":
     show_home_page()
 elif st.session_state.page == "Pendahuluan":
