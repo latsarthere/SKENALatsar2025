@@ -17,35 +17,21 @@ st.set_page_config(
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    /* Mengatur padding utama agar tidak terlalu mepet ke atas */
-    .block-container {
-        padding-top: 2rem;
-    }
-    /* Warna header */
-    h1, h2, h3, h4, h5 {
-        color: #0073C4; /* Biru */
-    }
-    /* Tombol primer (Login, Scraping) */
+    .block-container { padding-top: 2rem; }
+    h1, h2, h3, h4, h5 { color: #0073C4; }
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
-        background-color: #0073C4;
-        color: white;
-        border: none;
+        background-color: #0073C4; color: white; border: none;
     }
     div[data-testid="stButton"] > button[kind="primary"]:hover,
     div[data-testid="stForm"] > form > div > button:hover {
-        background-color: #005A9E;
-        color: white;
+        background-color: #005A9E; color: white;
     }
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-    }
-    /* Notifikasi */
+    [data-testid="stSidebar"] { background-color: #f8f9fa; }
     .stAlert { border-radius: 5px; }
-    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; } /* Biru */
-    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; } /* Hijau */
-    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; } /* Oranye */
+    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
+    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
+    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -100,26 +86,28 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
     
-    semua_hasil = []
-    total_kategori = len(kata_kunci_lapus_dict)
+    # --- [DIUBAH] Gunakan session_state untuk menyimpan hasil ---
+    if 'hasil_scraping' not in st.session_state:
+        st.session_state.hasil_scraping = []
     
-    for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
+    for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
-            status_placeholder.info(f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
+            status_placeholder.info(f"⏳ Memproses: {kategori} | Waktu: {int(elapsed_time // 60)}m {int(elapsed_time % 60)}d")
             
             if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
             if not keyword: continue
             
-            keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
+            keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}'")
             
             search_query = f'"{keyword}" "{nama_daerah}"'
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     link = entry.link
-                    if any(d['Link'] == link for d in semua_hasil): continue
+                    # Cek duplikat berdasarkan link di session_state
+                    if any(d['Link'] == link for d in st.session_state.hasil_scraping): continue
 
                     judul = entry.title
                     ringkasan = ambil_ringkasan(link)
@@ -135,15 +123,17 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
                         
-                        semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
+                        # --- [DIUBAH] Simpan hasil ke session_state ---
+                        st.session_state.hasil_scraping.append({
+                            "Nomor": len(st.session_state.hasil_scraping) + 1, "Kata Kunci": keyword, "Judul": judul,
                             "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
             except Exception:
                 continue
 
-        if semua_hasil:
-            df_live = pd.DataFrame(semua_hasil)
+        # --- [DIUBAH] Update tabel dari session_state ---
+        if st.session_state.hasil_scraping:
+            df_live = pd.DataFrame(st.session_state.hasil_scraping)
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
@@ -154,15 +144,15 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     status_placeholder.empty()
     keyword_placeholder.empty()
     
-    if semua_hasil:
-        return pd.DataFrame(semua_hasil)
+    # Kembalikan hasil dari session_state
+    if st.session_state.hasil_scraping:
+        return pd.DataFrame(st.session_state.hasil_scraping)
     else:
         return pd.DataFrame()
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home menjadi lebih rapi ---
     with st.container():
         st.image("logo skena.png", width=200)
         st.title("Sistem Scraping Fenomena Konawe Selatan")
@@ -281,6 +271,9 @@ def show_scraping_page():
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
     if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary", disabled=is_disabled):
+        # --- [DIUBAH] Reset session_state setiap kali scraping baru dimulai ---
+        st.session_state.hasil_scraping = []
+        
         tahun_int = int(tahun_input)
         tanggal_awal, tanggal_akhir = get_rentang_tanggal(tahun_int, triwulan_input, start_date_input, end_date_input)
         
@@ -322,6 +315,9 @@ def show_scraping_page():
                 st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
 
             if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
+                # Hapus hasil lama dan rerun
+                if 'hasil_scraping' in st.session_state:
+                    del st.session_state.hasil_scraping
                 st.rerun()
         else:
             st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
