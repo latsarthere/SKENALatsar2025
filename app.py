@@ -285,9 +285,9 @@ def show_scraping_page():
         kategori_terpilih = st.multiselect(
             'Pilih kategori untuk diproses:',
             options=original_categories,
-            max_selections=5  # Menambahkan batasan maksimal 5 pilihan
+            max_selections=3  # Menambahkan batasan maksimal 3 pilihan
         )
-        st.caption("Catatan: Anda hanya dapat memilih maksimal 5 kategori.")
+        st.caption("Catatan: Anda hanya dapat memilih maksimal 3 kategori.")
 
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
