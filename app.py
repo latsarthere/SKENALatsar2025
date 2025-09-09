@@ -74,21 +74,37 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ambil_ringkasan(link):
+# --- [PERUBAHAN 1] ---
+# Fungsi ini diubah untuk mengembalikan URL final dan Ringkasan
+def ekstrak_info_artikel(link_google):
+    """
+    Mengunjungi link Google, mengambil URL final dan ringkasan artikel.
+    Mengembalikan tuple: (url_final, ringkasan)
+    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(link, timeout=10, headers=headers)
+        response = requests.get(link_google, timeout=10, headers=headers)
         response.raise_for_status()
+        
+        # Ini adalah URL tujuan setelah redirect
+        url_final = response.url
+        
         soup = BeautifulSoup(response.text, 'html.parser')
+        ringkasan = ""
+        
         deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'): return deskripsi['content']
-        og_desc = soup.find('meta', attrs={'property': 'og:description'})
-        if og_desc and og_desc.get('content'): return og_desc['content']
-        p_tag = soup.find('p')
-        if p_tag: return p_tag.get_text(strip=True)
+        if deskripsi and deskripsi.get('content'):
+            ringkasan = deskripsi['content']
+        elif soup.find('meta', attrs={'property': 'og:description'}) and soup.find('meta', attrs={'property': 'og:description'}).get('content'):
+            ringkasan = soup.find('meta', attrs={'property': 'og:description'})['content']
+        elif soup.find('p'):
+            ringkasan = soup.find('p').get_text(strip=True)
+            
+        return url_final, ringkasan
+        
     except Exception:
-        return ""
-    return ""
+        # Jika gagal, kembalikan None agar bisa dilewati
+        return None, ""
 
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
@@ -118,11 +134,16 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link = entry.link
-                    if any(d['Link'] == link for d in semua_hasil): continue
+                    
+                    # --- [PERUBAHAN 2] ---
+                    # Panggil fungsi baru dan gunakan hasilnya
+                    link_final, ringkasan = ekstrak_info_artikel(entry.link)
+
+                    # Jika link gagal diakses atau sudah ada, lewati
+                    if not link_final or any(d['Link'] == link_final for d in semua_hasil):
+                        continue
 
                     judul = entry.title
-                    ringkasan = ambil_ringkasan(link)
                     
                     judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
@@ -137,9 +158,11 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
+                            "Link": link_final,  # Simpan link final
+                            "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
-            except Exception:
+            except Exception as e:
+                # st.warning(f"Error saat mencari: {e}") # Uncomment untuk debug
                 continue
 
         if semua_hasil:
@@ -148,20 +171,19 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
-                # --- [DIUBAH] MODIFIKASI BAGIAN INI ---
                 st.dataframe(
                     df_live,
                     use_container_width=True,
                     height=400,
                     column_config={
                         "Link": st.column_config.LinkColumn(
-                            "Link Berita", # Mengubah label header kolom
-                            help="Klik untuk membuka tautan berita di tab baru",
-                            width="large" # Memberi ruang lebih lebar untuk kolom link
-                        )
+                            "Link Berita",
+                            help="Klik untuk membuka tautan berita di tab baru.",
+                            width="large"
+                        ),
+                        "Ringkasan": st.column_config.TextColumn(width="medium"),
                     }
                 )
-                # --- AKHIR PERUBAHAN ---
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
 
     status_placeholder.empty()
@@ -175,7 +197,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 # --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home menjadi lebih rapi ---
     with st.container():
         st.image("logo skena.png", width=200)
         st.title("Sistem Scraping Fenomena Konawe Selatan")
@@ -272,7 +293,7 @@ def show_scraping_page():
     st.header("Atur Parameter Scraping")
     
     tahun_sekarang = date.today().year
-    tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1))
+    tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 2)) # Ditambah 2 untuk tahun depan
     tahun_input = st.selectbox("Pilih Tahun:", options=tahun_list)
     triwulan_list = ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"]
     triwulan_input = st.selectbox("Pilih Triwulan:", options=triwulan_list)
@@ -359,14 +380,14 @@ with st.sidebar:
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login", use_container_width=True, type="primary"):
-                if username == "user7405" and password == "bps7405":
+                if username == "user7045" and password == "bps7045": # Ganti username & pass
                     st.session_state.logged_in = True
                     st.session_state.page = "Home"
                     st.rerun()
                 else:
                     st.warning("Username atau password salah. Hubungi admin untuk bantuan.")
     else:
-        st.success(f"Selamat datang, **user7405**!")
+        st.success(f"Selamat datang, **Admin**!") # Ganti nama user
         if st.button("Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.page = "Home"
