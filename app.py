@@ -1,4 +1,4 @@
-# Versi Final dengan Selenium untuk mengatasi JavaScript Redirect
+# Versi Final dengan requests-html
 import streamlit as st
 import pandas as pd
 import time
@@ -7,11 +7,7 @@ from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 from pygooglenews import GoogleNews
 import google.generativeai as genai
-from newspaper import Article
-# Import baru untuk Selenium
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from requests_html import HTMLSession # <-- IMPORT UTAMA
 
 # --- Konfigurasi API Key Gemini ---
 try:
@@ -21,24 +17,20 @@ except (KeyError, FileNotFoundError):
     st.error("Secret 'gemini_api_key_1' tidak ditemukan. Harap tambahkan di 'Manage app' > 'Secrets'.")
     API_KEY = None
 
-# --- Konfigurasi Selenium (PENTING) ---
+# --- Konfigurasi Session untuk requests-html ---
 @st.cache_resource
-def get_driver():
-    """Menginisialisasi driver browser Chrome untuk Selenium."""
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    service = Service(executable_path="/usr/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
+def get_html_session():
+    return HTMLSession()
 
 # --- FUNGSI-FUNGSI UTAMA ---
 @st.cache_resource
 def get_gemini_model():
     if not API_KEY: return None
-    return genai.GenerativeModel("gemini-1.5-flash")
+    try:
+        return genai.GenerativeModel("gemini-1.5-flash")
+    except Exception as e:
+        st.warning(f"Gagal mengkonfigurasi API Key: {e}")
+        return None
 
 def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
     model = get_gemini_model()
@@ -51,28 +43,24 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
         return "[Gagal meringkas]"
 
 def fetch_article_data(google_news_url):
-    """Menggunakan Selenium untuk mendapatkan URL asli, lalu newspaper untuk konten."""
-    driver = get_driver()
+    session = get_html_session()
     try:
-        # Langkah 1: Gunakan Selenium untuk membuka link Google & mendapatkan URL asli
-        driver.get(google_news_url)
-        time.sleep(3) # Beri waktu 3 detik untuk JavaScript redirect berjalan
-        final_url = driver.current_url
-
-        # Jika setelah 3 detik masih di halaman google, anggap gagal redirect
+        r = session.get(google_news_url, timeout=30)
+        # Jalankan JavaScript di halaman untuk memproses redirect
+        r.html.render(sleep=5, timeout=30)
+        
+        final_url = r.url
         if "google.com" in final_url:
             return "Gagal redirect dari Google.", google_news_url
 
-        # Langkah 2: Gunakan Newspaper untuk mem-parsing dari URL asli yang sudah didapat
-        article = Article(final_url)
-        article.download(input_html=driver.page_source) # Kirim HTML dari selenium agar lebih cepat
-        article.parse()
-        text = article.text[:4000] if article.text else "Konten artikel kosong."
-        return text, final_url
+        article_element = r.html.find('article', first=True)
+        text = article_element.text if article_element else "Konten artikel kosong."
+        
+        return text[:4000], final_url
     except Exception as e:
-        return f"Gagal memproses: {e}", google_news_url
+        return f"Gagal memproses link: {e}", google_news_url
 
-# (Sisa kode dari sini ke bawah tidak ada perubahan, Anda bisa copy paste seluruhnya)
+# (Sisa kode 95% sama, hanya pemanggilan fungsinya yang berubah)
 # --- Konfigurasi Halaman & Tampilan (CSS) ---
 st.set_page_config(page_title="SKENA", page_icon="logo skena.png", layout="wide")
 st.markdown("""<style>.block-container{padding-top:2rem} h1,h2,h3,h4,h5{color:#0073C4} [data-testid=stSidebar]{background-color:#f8f9fa}</style>""", unsafe_allow_html=True)
@@ -117,10 +105,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link_google = entry.link
+                    link = entry.link
                     judul = entry.title
                     
-                    article_text, link_asli = fetch_article_data(link_google)
+                    article_text, link_asli = fetch_article_data(link)
 
                     if any(d['Link Asli'] == link_asli for d in st.session_state.hasil_scraping): continue
                     
@@ -128,7 +116,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
-                    if ringkasan_ai != "TIDAK RELEVAN": # <-- Saringan AI bisa diaktifkan kembali
+                    if ringkasan_ai != "TIDAK RELEVAN":
                         try:
                             tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
@@ -158,7 +146,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     
     return pd.DataFrame(st.session_state.hasil_scraping) if st.session_state.hasil_scraping else pd.DataFrame()
 
-# (Sisa kode halaman sama persis seperti sebelumnya)
 # --- HALAMAN-HALAMAN APLIKASI ---
 def set_page(page_name): st.session_state.page = page_name
 
