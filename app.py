@@ -12,16 +12,26 @@ from urllib.parse import urlparse, parse_qs
 def get_real_url(google_url: str) -> str:
     """Ambil link asli dari link news.google.com"""
     try:
-        # Kalau ada parameter "url=" di dalam link, langsung ambil
+        # 1. Kalau ada query ?url= (jarang di RSS, sering di Search)
         parsed = urlparse(google_url)
         query = parse_qs(parsed.query)
         if "url" in query:
             return query["url"][0]
 
-        # Kalau bukan, coba follow redirect
+        # 2. Ikuti redirect normal
         r = requests.get(google_url, timeout=10, allow_redirects=True)
-        return r.url
-    except Exception:
+        final_url = r.url
+
+        # 3. Kalau masih news.google.com, coba cari <link rel="canonical">
+        if "news.google.com" in final_url:
+            soup = BeautifulSoup(r.text, "html.parser")
+            canonical = soup.find("link", rel="canonical")
+            if canonical and canonical.get("href"):
+                return canonical["href"]
+
+        return final_url
+    except Exception as e:
+        print(f"Error ambil real url: {e}")
         return google_url
 
 # --- Konfigurasi Halaman Streamlit ---
