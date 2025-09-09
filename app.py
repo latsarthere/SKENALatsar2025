@@ -12,7 +12,6 @@ from newspaper import Article
 
 # --- Konfigurasi API Key Gemini ---
 try:
-    # Mengambil API key dari Streamlit secrets
     API_KEY = st.secrets["gemini_api_key_1"]
     genai.configure(api_key=API_KEY)
 except (KeyError, FileNotFoundError):
@@ -36,19 +35,18 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
     """Membuat ringkasan relevan menggunakan Gemini AI."""
     model = get_gemini_model()
     if not model or not text or not text.strip() or "Gagal mengambil konten" in text or "Konten artikel kosong" in text:
-        return "TIDAK RELEVAN"
+        return "TIDAK RELEVAN (Konten Kosong)"
 
     prompt = (
-        f"Buat paragraf ringkas dan padu dalam 2 kalimat dengan maksimal 40 kata. "
-        f"Paragraf harus fokus pada topik '{usaha}' di wilayah '{wilayah}'. "
-        f"Jika teks yang diberikan TIDAK membahas topik '{usaha}' di '{wilayah}' atau tidak mengandung fenomena ekonomi yang relevan (seperti kenaikan/penurunan) terkait topik tersebut, tulis HANYA 'TIDAK RELEVAN'.\n\n"
-        f"Teks untuk dianalisis:\n---\n{text}\n---"
+        f"Analisis teks berikut. Buat ringkasan padu dalam 1-2 kalimat (maksimal 40 kata) yang fokus pada topik '{usaha}' di wilayah '{wilayah}'. "
+        f"Jika teks sama sekali tidak membahas topik tersebut atau fenomena ekonomi terkait di wilayah itu, tulis HANYA 'TIDAK RELEVAN'.\n\n"
+        f"Teks:\n---\n{text}\n---"
     )
     try:
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception:
-        return "[Gagal Meringkas]"
+        return "[Gagal Meringkas oleh AI]"
 
 def get_article_text_with_newspaper(link):
     """Mengambil teks konten utama dari link berita menggunakan newspaper3k."""
@@ -57,7 +55,7 @@ def get_article_text_with_newspaper(link):
         article = Article(link, config={'headers': headers}, request_timeout=15)
         article.download()
         article.parse()
-        return article.text[:4000] if article.text else "Konten artikel kosong."
+        return article.text[:2500] if article.text else "Konten artikel kosong."
     except Exception:
         return "Gagal mengambil konten artikel."
 
@@ -142,6 +140,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     if 'hasil_scraping' not in st.session_state:
         st.session_state.hasil_scraping = []
     
+    # <-- [PERUBAHAN UNTUK DEBUG]
+    # Kita akan tampilkan semua hasil, tidak peduli relevan atau tidak
+    # untuk melihat apa yang sebenarnya terjadi.
+    
     for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
@@ -156,60 +158,70 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             search_query = f'"{keyword}" "{nama_daerah}"'
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
+                if not search_results['entries']:
+                    continue # Lanjut ke keyword berikutnya jika tidak ada hasil
+                    
                 for entry in search_results['entries']:
                     gn_link = entry.link
-                    
                     real_link = get_real_url(gn_link)
                     
                     if any(d['Link'] == real_link for d in st.session_state.hasil_scraping): continue
 
                     judul = entry.title
                     
+                    # Ekstrak teks dan sumber
                     article_text = get_article_text_with_newspaper(real_link)
+                    sumber = get_source_from_url(real_link)
                     
+                    # Buat ringkasan AI
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
-                    if ringkasan_ai != "TIDAK RELEVAN":
-                        try:
-                            tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
-                            tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
-                        except (ValueError, TypeError):
-                            tanggal_str = "N/A"
-                        
-                        # --- [PERUBAHAN] Menambahkan sumber ---
-                        sumber = get_source_from_url(real_link)
-                        
-                        st.session_state.hasil_scraping.append({
-                            "Nomor": len(st.session_state.hasil_scraping) + 1,
-                            "Kategori": kategori,
-                            "Kata Kunci": keyword, 
-                            "Judul": judul,
-                            "Sumber": sumber, # <-- Kolom baru
-                            "Link": real_link, 
-                            "Tanggal": tanggal_str, 
-                            "Ringkasan AI": ringkasan_ai
-                        })
+                    try:
+                        tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
+                        tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
+                    except (ValueError, TypeError):
+                        tanggal_str = "N/A"
+                    
+                    # <-- [PERUBAHAN UNTUK DEBUG]
+                    # Tambahkan semua hasil ke tabel, termasuk teks mentah dan hasil ringkasan AI
+                    st.session_state.hasil_scraping.append({
+                        "Nomor": len(st.session_state.hasil_scraping) + 1,
+                        "Judul": judul,
+                        "Sumber": sumber,
+                        "Link": real_link,
+                        "Tanggal": tanggal_str,
+                        "Ringkasan AI": ringkasan_ai,
+                        "Teks Mentah": article_text # <-- Kolom baru untuk debug
+                    })
+
             except Exception as e:
                 st.warning(f"Error saat mencari '{keyword}': {e}")
                 continue
 
+        # Update tabel secara live setelah setiap kategori selesai
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            # --- [PERUBAHAN] Menambahkan "Sumber" ke urutan kolom ---
-            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Sumber", "Link", "Tanggal", "Ringkasan AI"]
-            df_live = df_live[kolom_urut]
+            # <-- [PERUBAHAN UNTUK DEBUG]
+            # Menampilkan semua kolom yang kita kumpulkan
+            kolom_urut = ["Nomor", "Judul", "Sumber", "Tanggal", "Ringkasan AI", "Teks Mentah", "Link"]
+            df_live_display = df_live[kolom_urut]
+            
             with table_placeholder.container():
-                st.markdown("### Hasil Scraping Terkini")
-                st.dataframe(df_live, use_container_width=True, height=400)
-                st.caption(f"Total berita ditemukan: {len(df_live)}")
+                st.markdown("### Hasil Scraping (Mode Debug)")
+                st.dataframe(df_live_display, use_container_width=True, height=400)
+                st.caption(f"Total berita ditemukan dan diproses: {len(df_live)}")
 
     status_placeholder.empty()
     keyword_placeholder.empty()
     
-    return pd.DataFrame(st.session_state.hasil_scraping) if st.session_state.hasil_scraping else pd.DataFrame()
+    # <-- [PERUBAHAN UNTUK DEBUG]
+    # Filter hasil akhir HANYA jika ingin diunduh
+    final_results = [res for res in st.session_state.hasil_scraping if "TIDAK RELEVAN" not in res["Ringkasan AI"]]
+    
+    return pd.DataFrame(final_results) if final_results else pd.DataFrame()
 
 
-# --- HALAMAN-HALAMAN APLIKASI ---
+# --- HALAMAN-HALAMAN APLIKASI (Tidak ada perubahan di bawah sini) ---
 def set_page(page_name):
     st.session_state.page = page_name
 
@@ -373,9 +385,16 @@ def show_scraping_page():
             st.success(f"Scraping telah selesai dalam {total_duration_str}.")
 
             if not hasil_df.empty:
+                # <-- [PERUBAHAN UNTUK DEBUG]
+                # Pastikan kolom yang diunduh adalah kolom yang sudah difilter
+                kolom_final = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Sumber", "Link", "Tanggal", "Ringkasan AI"]
+                # Cek kolom mana yang ada di dataframe hasil
+                kolom_tersedia = [col for col in kolom_final if col in hasil_df.columns]
+                output_df = hasil_df[kolom_tersedia]
+
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
+                    output_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
                 
                 kategori_file = st.session_state.sub_page
                 periode_file = triwulan_input.replace(' ', '_')
@@ -393,6 +412,7 @@ def show_scraping_page():
                     use_container_width=True
                 )
             else:
+                # Pesan ini akan muncul jika setelah semua proses, tidak ada berita relevan yang tersisa
                 st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
 
             if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
