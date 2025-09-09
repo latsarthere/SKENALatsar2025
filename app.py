@@ -6,6 +6,18 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
+from urllib.parse import urlparse, parse_qs
+
+def get_real_url(gn_link):
+    """Ekstrak link asli dari Google News RSS link."""
+    try:
+        parsed = urlparse(gn_link)
+        qs = parse_qs(parsed.query)
+        if "url" in qs:
+            return qs["url"][0]
+    except:
+        pass
+    return gn_link  # fallback kalau gagal
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -118,7 +130,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link = entry.link
+                    link = get_real_url(entry.link)
                     if any(d['Link'] == link for d in semua_hasil): continue
 
                     judul = entry.title
@@ -139,7 +151,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     "Nomor": len(semua_hasil) + 1,
     "Kata Kunci": keyword,
     "Judul": judul,
-    "Link": f"[🔗 Buka Berita]({link})",   # 👈 diubah ke format hyperlink markdown
+    "Link": link, 
     "Tanggal": tanggal_str,
     "Ringkasan": ringkasan
 })
