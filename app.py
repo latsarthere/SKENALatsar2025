@@ -152,7 +152,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
 
                 for entry in search_results['entries']:
-                    real_url = entry.get("link")
+                    real_url = get_real_url(entry.link)
                     if "source" in entry:  # kadang ada sumber asli
                         real_url = entry.source.get("href", real_url)
                         
@@ -178,14 +178,14 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = entry.published
 
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1,
-                            "Kata Kunci": keyword,
-                            "Judul": judul,
-                            "Link": real_url,    # ✅ asli (detik/tribun/dll)
-                            "Sumber": sumber,    # ✅ nama domain
-                            "Tanggal": tanggal_str,
-                            "Ringkasan": ringkasan
-                        })
+    "Nomor": nomor,
+    "Kata Kunci": kata_kunci,
+    "Judul": entry.title,
+    "Link": real_url,   # ✅ pakai real_url
+    "Sumber": urlparse(real_url).netloc,  # contoh: tribunnews.com
+    "Tanggal": tanggal,
+    "Ringkasan": ringkasan
+})
 
             except Exception:
                 continue
