@@ -6,23 +6,48 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
-from urllib.parse import urlparse, parse_qs # Ditambahkan parse_qs
+from urllib.parse import urlparse
 
+# Import baru untuk solusi ringan (pengganti Selenium)
+from requests_html import AsyncHTMLSession
+import asyncio
+
+# Versi aman untuk lingkungan seperti Streamlit/Jupyter
+@st.cache_data(show_spinner=False)
 def get_real_url(gn_link):
-    """Ambil URL asli dari link Google News."""
-    try:
-        # 1. Kalau ada parameter url= langsung ambil
-        parsed = urlparse(gn_link)
-        qs = parse_qs(parsed.query)
-        if "url" in qs:
-            return qs["url"][0]  # ✅ langsung full URL asli
+    """Ambil URL asli dari link Google News menggunakan AsyncHTMLSession (lebih aman untuk Streamlit)."""
+    
+    # Fungsi async internal untuk menjalankan proses
+    async def resolve_url():
+        session = AsyncHTMLSession()
+        try:
+            r = await session.get(gn_link, timeout=20)
+            await r.html.arender(sleep=2, timeout=20)
+            final_url = r.url
+            await session.close()
+            return final_url
+        except Exception as e:
+            await session.close()
+            print(f"Error dengan AsyncHTMLSession: {e}")
+            return gn_link
 
-        # 2. Kalau tidak ada, ikuti redirect dengan requests
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
-        return resp.url  # ✅ ini juga full URL asli
-    except Exception:
+    # Menjalankan fungsi async dari dalam fungsi sync
+    try:
+        # Cek apakah sudah ada event loop yang berjalan
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # Jika tidak ada, buat yang baru
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    # Jalankan task dan tunggu hasilnya
+    final_url = loop.run_until_complete(resolve_url())
+    
+    if "google.com" in final_url:
         return gn_link
+    
+    return final_url
+
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -93,6 +118,8 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 
 def ambil_ringkasan(link):
     try:
+        if not link.startswith(('http://', 'https://')):
+            return ""
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(link, timeout=10, headers=headers)
         response.raise_for_status()
@@ -110,20 +137,15 @@ def ambil_ringkasan(link):
 # --- Fungsi scraping diperbarui ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                    kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-
-    # --- Ambil daftar kata kunci ---
     kata_kunci_lapus_dict = {
         c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist()
         for c in kata_kunci_lapus_df.columns
     }
     nama_daerah = "Konawe Selatan"
-
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
-
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
-
     semua_hasil = []
     total_kategori = len(kata_kunci_lapus_dict)
 
@@ -134,69 +156,40 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) "
                 f"| 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}"
             )
-
-            if pd.isna(keyword_raw):
-                continue
+            if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
-            if not keyword:
-                continue
+            if not keyword: continue
 
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
-
             search_query = f'"{keyword}" "{nama_daerah}"'
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
-
                 for entry in search_results['entries']:
-                    # =================== PERUBAHAN DIMULAI DI SINI ===================
-
-                    raw_link = entry.link
-                    real_url = get_real_url(raw_link)  # Ambil URL asli/tujuan akhir
-
-                    # Periksa duplikat berdasarkan URL tujuan akhir (real_url)
+                    real_url = get_real_url(entry.link)
                     if any(d['Link'] == real_url for d in semua_hasil):
                         continue
-
                     judul = entry.title
                     ringkasan = ambil_ringkasan(real_url)
-
                     judul_lower = judul.lower()
                     ringkasan_lower = ringkasan.lower()
                     keyword_lower = keyword.lower()
-
-                    lokasi_ditemukan = any(
-                        loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter
-                    )
-                    keyword_ditemukan = (
-                        keyword_lower in judul_lower or keyword_lower in ringkasan_lower
-                    )
+                    lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
+                    keyword_ditemukan = (keyword_lower in judul_lower or keyword_lower in ringkasan_lower)
 
                     if lokasi_ditemukan or keyword_ditemukan:
                         try:
-                            tanggal_dt = datetime.strptime(
-                                entry.published, '%a, %d %b %Y %H:%M:%S %Z'
-                            )
+                            tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
-                        
                         sumber = urlparse(real_url).netloc.replace("www.", "")
-
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1,
-                            "Kata Kunci": keyword,
-                            "Judul": judul,
-                            # MODIFIKASI: Kolom Link diisi dengan URL tujuan akhir (real_url)
-                            "Link": real_url,
-                            "Sumber": sumber,
-                            "Tanggal": tanggal_str,
-                            "Ringkasan": ringkasan
+                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
+                            "Link": real_url, "Sumber": sumber, "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
-                    # =================== AKHIR DARI PERUBAHAN ===================
-            except Exception:
+            except Exception as e:
+                st.warning(f"Terjadi error saat mencari '{keyword}': {e}")
                 continue
-
-        # Update live table setiap selesai 1 kategori
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Sumber", "Tanggal", "Ringkasan"]
@@ -205,38 +198,28 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 st.markdown("### Hasil Scraping Terkini")
                 st.dataframe(df_live, use_container_width=True, height=400)
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
-    
-    # Selesai scraping, kembalikan hasil akhir dalam bentuk DataFrame
     if semua_hasil:
         return pd.DataFrame(semua_hasil)
     else:
         return pd.DataFrame()
 
-
-# --- HALAMAN-HALAMAN APLIKASI ---
-# (Bagian kode ini sama seperti sebelumnya, tidak ada perubahan)
+# --- SISA KODE (HALAMAN STREAMLIT) TIDAK PERLU DIUBAH ---
+# (Salin tempel saja semua fungsi show_home_page(), show_scraping_page(), dll. dari kode Anda sebelumnya)
 
 def show_home_page():
-    # --- [DIUBAH] Tata letak halaman Home menjadi lebih rapi ---
     with st.container():
-        st.image("logo skena.png", width=200)
+        # st.image("logo skena.png", width=200) # Ganti jika path logo berbeda
         st.title("Sistem Scraping Fenomena Konawe Selatan")
-    
     st.markdown("---")
-    
     st.markdown("""
     Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.
-    
     _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu._
     """)
-    
     if not st.session_state.get('logged_in', False):
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
-    
     st.header("Pilih Kategori Data")
     col1_btn, col2_btn, col3_btn = st.columns(3, gap="large")
     is_disabled = not st.session_state.get('logged_in', False)
-    
     with col1_btn:
         st.subheader("👥 Sosial")
         st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
@@ -268,29 +251,21 @@ def show_pendahuluan_page():
 def show_documentation_page():
     st.title("🗂️ Dokumentasi")
     st.markdown("Seluruh file, dataset, dan dokumentasi terkait proyek ini tersimpan di Google Drive.")
-    
     folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
     st.link_button("Buka Google Drive", folder_url, use_container_width=True, type="primary")
-    
     st.markdown("---")
-    
     with st.expander("Tampilkan Pratinjau Folder di Sini"):
         embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
         st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
 
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
-    
     sub_page_options = ["Neraca", "Sosial", "Produksi"]
     st.session_state.sub_page = st.radio(
-        "Pilih Kategori Data:",
-        sub_page_options,
-        horizontal=True,
-        key="sub_page_radio"
+        "Pilih Kategori Data:", sub_page_options, horizontal=True, key="sub_page_radio"
     )
     st.markdown("---")
-    
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         st.header("Segera Hadir!")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
@@ -299,20 +274,16 @@ def show_scraping_page():
 
     url_lapus = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
     url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
-
     with st.spinner("Memuat data kata kunci..."):
         df_lapus = load_data_from_url(url_lapus, sheet_name='Sheet1')
         df_daerah = load_data_from_url(url_daerah)
-
     if df_lapus is None or df_daerah is None:
         st.error("Gagal memuat data kata kunci. Aplikasi tidak dapat berjalan.")
         return
 
     st.success("✅ Data kata kunci berhasil dimuat.")
     original_categories = df_lapus.columns.tolist()
-
     st.header("Atur Parameter Scraping")
-    
     tahun_sekarang = date.today().year
     tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1))
     tahun_input = st.selectbox("Pilih Tahun:", options=tahun_list)
@@ -325,39 +296,29 @@ def show_scraping_page():
             start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30))
         with col2:
             end_date_input = st.date_input("Tanggal Akhir", date.today())
-    
     opsi_kategori_list = ["Semua Kategori", "Pilih Kategori Tertentu"]
     mode_kategori = st.radio("Pilih Opsi Kategori:", opsi_kategori_list, horizontal=True)
-    
     kategori_terpilih = []
     if mode_kategori == 'Pilih Kategori Tertentu':
         kategori_terpilih = st.multiselect('Pilih kategori untuk diproses:', options=original_categories)
-
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
     if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary", disabled=is_disabled):
         tahun_int = int(tahun_input)
         tanggal_awal, tanggal_akhir = get_rentang_tanggal(tahun_int, triwulan_input, start_date_input, end_date_input)
-        
         if tanggal_awal and tanggal_akhir:
             start_time = time.time()
             df_lapus_untuk_proses = df_lapus[kategori_terpilih] if mode_kategori == 'Pilih Kategori Tertentu' else df_lapus
-            
             st.markdown("---")
             st.header("Proses & Hasil Scraping")
-            
             keyword_placeholder = st.empty()
             table_placeholder = st.empty()
-            
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
                 st.info("Menunggu hasil pertama ditemukan...")
-            
             hasil_df = start_scraping(tanggal_awal, tanggal_akhir, df_lapus_untuk_proses, df_daerah, start_time, table_placeholder, keyword_placeholder)
-            
             end_time = time.time()
             total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
-
             st.header("✅ Proses Selesai")
             st.success(f"Scraping telah selesai dalam {total_duration_str}.")
 
@@ -365,7 +326,6 @@ def show_scraping_page():
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
-                
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
                     data=output.getvalue(),
@@ -375,26 +335,18 @@ def show_scraping_page():
                 )
             else:
                 st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
-
             if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
                 st.rerun()
         else:
             st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
+if "page" not in st.session_state: st.session_state.page = "Home"
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "sub_page" not in st.session_state: st.session_state.sub_page = "Neraca"
 
-# Inisialisasi Session State
-if "page" not in st.session_state:
-    st.session_state.page = "Home"
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "sub_page" not in st.session_state:
-    st.session_state.sub_page = "Neraca"
-
-# --- Sidebar ---
 with st.sidebar:
-    st.image("logo bps konsel.png")
-    
+    # st.image("logo bps konsel.png")
     if not st.session_state.logged_in:
         with st.form("login_form"):
             st.header("Login")
@@ -413,32 +365,22 @@ with st.sidebar:
             st.session_state.logged_in = False
             st.session_state.page = "Home"
             st.rerun()
-
     st.markdown("---")
     st.header("Menu Navigasi")
-    
     if st.button("🏠 Home", use_container_width=True):
         st.session_state.page = "Home"; st.rerun()
-        
     if st.button("📖 Pendahuluan", use_container_width=True):
         st.session_state.page = "Pendahuluan"; st.rerun()
-
     if st.session_state.logged_in:
         if st.button("⚙️ Scraping", use_container_width=True):
             st.session_state.page = "Scraping"; st.rerun()
-        
         if st.button("🗂️ Dokumentasi", use_container_width=True):
             st.session_state.page = "Dokumentasi"; st.rerun()
 
-# --- Logika Tampilan Halaman ---
-if st.session_state.page == "Home":
-    show_home_page()
-elif st.session_state.page == "Pendahuluan":
-    show_pendahuluan_page()
-elif st.session_state.page == "Scraping" and st.session_state.logged_in:
-    show_scraping_page()
-elif st.session_state.page == "Dokumentasi" and st.session_state.logged_in:
-    show_documentation_page()
+if st.session_state.page == "Home": show_home_page()
+elif st.session_state.page == "Pendahuluan": show_pendahuluan_page()
+elif st.session_state.page == "Scraping" and st.session_state.logged_in: show_scraping_page()
+elif st.session_state.page == "Dokumentasi" and st.session_state.logged_in: show_documentation_page()
 else:
     st.session_state.page = "Home"
     st.rerun()
