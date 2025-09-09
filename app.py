@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
-from urllib.parse import urlparse # --- [PERUBAHAN 1] --- Menambahkan library untuk parsing URL
+from urllib.parse import urlparse
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -75,12 +75,10 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-# --- [PERUBAHAN 2] ---
-# Fungsi diubah untuk mengembalikan URL final, Ringkasan, dan Sumber
 def ekstrak_info_artikel(link_google):
     """
     Mengunjungi link Google, mengambil URL final, ringkasan, dan sumber artikel.
-    Mengembalikan tuple: (url_final, ringkasan, sumber)
+    Mengembalikan tuple: (url_final, ringkasan, sumber_dari_url)
     """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -89,9 +87,8 @@ def ekstrak_info_artikel(link_google):
         
         url_final = response.url
         
-        # Ekstrak sumber dari URL final
         parsed_uri = urlparse(url_final)
-        sumber = parsed_uri.netloc.replace('www.', '')
+        sumber_dari_url = parsed_uri.netloc.replace('www.', '')
         
         soup = BeautifulSoup(response.text, 'html.parser')
         ringkasan = ""
@@ -104,7 +101,7 @@ def ekstrak_info_artikel(link_google):
         elif soup.find('p'):
             ringkasan = soup.find('p').get_text(strip=True)
             
-        return url_final, ringkasan, sumber
+        return url_final, ringkasan, sumber_dari_url
         
     except Exception:
         return None, "", ""
@@ -138,16 +135,33 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     
-                    # --- [PERUBAHAN 3] ---
-                    # Panggil fungsi baru dan dapatkan 3 nilai
-                    link_final, ringkasan, sumber = ekstrak_info_artikel(entry.link)
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(entry.link)
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil):
                         continue
 
-                    judul = entry.title
-                    
-                    judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
+                    # --- [PERUBAHAN UTAMA DI SINI] ---
+                    # Logika baru untuk menentukan sumber dan membersihkan judul
+                    judul_asli = entry.title
+                    sumber_final = ""
+                    judul_bersih = judul_asli
+
+                    # Coba pisahkan judul berdasarkan tanda '-' terakhir
+                    if ' - ' in judul_asli:
+                        parts = judul_asli.rsplit(' - ', 1)
+                        # Jika pemisahan berhasil (ada 2 bagian) dan bagian kedua tidak kosong
+                        if len(parts) == 2 and parts[1].strip():
+                            judul_bersih = parts[0].strip()
+                            sumber_final = parts[1].strip()
+                        else:
+                            # Jika gagal, gunakan sumber dari URL sebagai cadangan
+                            sumber_final = sumber_dari_url
+                    else:
+                        # Jika tidak ada tanda '-', gunakan sumber dari URL sebagai cadangan
+                        sumber_final = sumber_dari_url
+                    # --- AKHIR PERUBAHAN ---
+
+                    judul_lower, ringkasan_lower, keyword_lower = judul_bersih.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
                     keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
 
@@ -158,12 +172,13 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
                         
-                        # Tambahkan 'Sumber' ke dictionary
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
+                            "Nomor": len(semua_hasil) + 1,
+                            "Kata Kunci": keyword,
+                            "Judul": judul_bersih, # Gunakan judul yang sudah bersih
                             "Link": link_final,
                             "Tanggal": tanggal_str,
-                            "Sumber": sumber,
+                            "Sumber": sumber_final, # Gunakan sumber yang sudah ditentukan
                             "Ringkasan": ringkasan
                         })
             except Exception:
@@ -171,7 +186,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
-            # Tambahkan 'Sumber' ke urutan kolom
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber", "Ringkasan"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
@@ -181,15 +195,17 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     use_container_width=True,
                     height=400,
                     column_config={
+                        "Judul": st.column_config.TextColumn(width="large"),
                         "Link": st.column_config.LinkColumn(
                             "Link Berita",
                             help="Klik untuk membuka tautan berita di tab baru.",
-                            width="large"
+                            width="medium"
                         ),
                         "Sumber": st.column_config.TextColumn(
                             "Sumber Berita",
-                            width="medium"
-                        )
+                            width="small"
+                        ),
+                        "Ringkasan": st.column_config.TextColumn(width="large")
                     }
                 )
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
