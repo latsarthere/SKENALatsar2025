@@ -6,6 +6,69 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
+import google.generativeai as genai # --- BARU ---
+
+# --- BARU: Konfigurasi API Key Gemini ---
+# PENTING: Ganti dengan API key Anda. Sebaiknya gunakan st.secrets untuk keamanan.
+# Contoh: API_KEYS = [st.secrets["gemini_api_key_1"], st.secrets["gemini_api_key_2"]]
+API_KEYS = [
+    "GANTI_DENGAN_API_KEY_ANDA_1",
+    "GANTI_DENGAN_API_KEY_ANDA_2", # Tambahkan beberapa key jika ada untuk rotasi
+]
+current_key_idx = 0
+
+# --- BARU: Fungsi untuk rotasi API Key & mendapatkan model Gemini ---
+def get_rotating_model():
+    global current_key_idx
+    if not API_KEYS or API_KEYS[0] == "GANTI_DENGAN_API_KEY_ANDA_1":
+        st.error("Harap masukkan Gemini API Key Anda di dalam kode.")
+        return None
+    
+    key = API_KEYS[current_key_idx]
+    current_key_idx = (current_key_idx + 1) % len(API_KEYS)
+    
+    try:
+        genai.configure(api_key=key)
+        return genai.GenerativeModel("gemini-1.5-flash") # Menggunakan model flash yang lebih cepat
+    except Exception as e:
+        st.warning(f"Gagal mengkonfigurasi API Key: {e}")
+        return None
+
+# --- BARU: Fungsi ringkasan dengan Gemini (dari Anda) ---
+def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
+    model = get_rotating_model()
+    if not model or not text.strip():
+        return "TIDAK RELEVAN"
+
+    prompt = (
+        f"Buat paragraf ringkas dan padu dalam 2 kalimat dengan maksimal 40 kata. "
+        f"Paragraf harus fokus pada topik '{usaha}' di wilayah '{wilayah}'. "
+        f"Jika teks yang diberikan TIDAK membahas topik '{usaha}' di '{wilayah}' atau tidak mengandung fenomena ekonomi yang relevan (seperti kenaikan/penurunan) terkait topik tersebut, tulis HANYA 'TIDAK RELEVAN'.\n\n"
+        f"Teks untuk dianalisis:\n---\n{text}\n---"
+    )
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        return f"[Gagal meringkas: {e}]"
+
+# --- BARU: Fungsi untuk mengambil teks lengkap dari artikel ---
+def get_article_content(link):
+    """Mengambil konten teks utama dari sebuah link berita untuk diringkas."""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(link, timeout=15, headers=headers)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Mengambil semua teks dari tag paragraf <p> dan menggabungkannya
+        paragraphs = soup.find_all('p')
+        full_text = ' '.join([p.get_text(strip=True) for p in paragraphs])
+        
+        # Batasi panjang teks untuk efisiensi API
+        return full_text[:4000] 
+    except Exception:
+        return "" # Mengembalikan string kosong jika gagal
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -33,13 +96,11 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
     
-    /* [BARU] Class untuk perataan teks */
     .text-center { text-align: center; }
     .text-justify { text-align: justify; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
-
 
 # --- FUNGSI-FUNGSI PENDUKUNG ---
 @st.cache_data
@@ -64,28 +125,10 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ambil_ringkasan(link):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(link, timeout=10, headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'): return deskripsi['content']
-        og_desc = soup.find('meta', attrs={'property': 'og:description'})
-        if og_desc and og_desc.get('content'): return og_desc['content']
-        p_tag = soup.find('p')
-        if p_tag: return p_tag.get_text(strip=True)
-    except Exception:
-        return ""
-    return ""
-
+# --- FUNGSI UTAMA SCRAPING (DIUBAH) ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
-    
-    kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
-    lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
     
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
@@ -112,13 +155,19 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     if any(d['Link'] == link for d in st.session_state.hasil_scraping): continue
 
                     judul = entry.title
-                    ringkasan = ambil_ringkasan(link)
                     
-                    judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
-                    lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
-                    keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
+                    # --- DIUBAH: Logika untuk mendapatkan ringkasan dari Gemini ---
+                    # 1. Ambil teks lengkap dari artikel
+                    article_text = get_article_content(link)
+                    
+                    # 2. Jika teks ada, ringkas dengan Gemini
+                    if article_text:
+                        ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
+                    else:
+                        ringkasan_ai = "Gagal mengambil konten artikel."
 
-                    if lokasi_ditemukan or keyword_ditemukan:
+                    # 3. Lanjutkan hanya jika ringkasan relevan
+                    if ringkasan_ai != "TIDAK RELEVAN":
                         try:
                             tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
@@ -129,14 +178,16 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             "Nomor": len(st.session_state.hasil_scraping) + 1,
                             "Kategori": kategori,
                             "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
+                            "Link": link, "Tanggal": tanggal_str, "Ringkasan AI": ringkasan_ai
                         })
-            except Exception:
+            except Exception as e:
+                st.warning(f"Error saat mencari '{keyword}': {e}")
                 continue
 
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
+            # --- DIUBAH: Mengganti kolom "Ringkasan" menjadi "Ringkasan AI" ---
+            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan AI"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
@@ -151,7 +202,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     else:
         return pd.DataFrame()
 
-# --- HALAMAN-HALAMAN APLIKASI ---
+# --- HALAMAN-HALAMAN APLIKASI (Tidak ada perubahan, kode tetap sama) ---
+# ... (Salin semua fungsi halaman Anda dari show_home_page() hingga akhir script di sini) ...
 
 def set_page(page_name):
     st.session_state.page = page_name
@@ -160,7 +212,6 @@ def show_home_page():
     st.image("logo skena full.png", use_container_width=True)
     st.markdown("---")
     
-    # --- [DIUBAH] Teks pengantar menjadi justify ---
     st.markdown("""
     <div class='text-justify'>
         Hallo! Sistem Scraping Konawe Selatan (SKENA) merupakan alat bantu BPS Kabupaten Konawe Selatan dalam menyediakan data statistik yang lengkap. 
@@ -168,7 +219,6 @@ def show_home_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # --- [DIUBAH] Tombol Pendahuluan menjadi justify ---
     st.markdown("""
     <div class='text-justify' style='margin-top: 10px;'>
         Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <b>Pendahuluan</b> terlebih dahulu.
@@ -176,7 +226,6 @@ def show_home_page():
     """, unsafe_allow_html=True)
     
     if not st.session_state.get('logged_in', False):
-        # --- [DIUBAH] Info Login menjadi justify ---
         st.markdown("<div class='text-justify' style='margin-top: 1rem;'>", unsafe_allow_html=True)
         st.info("Silakan Login melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -281,11 +330,10 @@ def show_scraping_page():
     
     kategori_terpilih = []
     if mode_kategori == 'Pilih Kategori Tertentu':
-        # --- [BAGIAN YANG DIUBAH] ---
         kategori_terpilih = st.multiselect(
             'Pilih kategori untuk diproses:',
             options=original_categories,
-            max_selections=3  # Menambahkan batasan maksimal 3 pilihan
+            max_selections=3
         )
         st.caption("Catatan: Anda hanya dapat memilih maksimal 3 kategori.")
 
