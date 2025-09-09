@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import google.generativeai as genai
 from newspaper import Article
 
@@ -49,15 +49,27 @@ def get_article_text_with_newspaper(link):
     except Exception:
         return "Gagal mengambil konten artikel."
 
-# --- Fungsi get_real_url sekarang menjadi CADANGAN ---
-def get_real_url_fallback(gn_link):
-    """(CADANGAN) Mengikuti redirect jika metode utama gagal."""
+# --- Fungsi Cerdas untuk Mendapatkan URL Lengkap ---
+def get_real_url(gn_link):
+    """
+    Ambil URL asli dan LENGKAP dari link Google News dengan 3 metode cadangan.
+    """
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
-        return resp.url
+        # METODE 1: Parsing URL (paling cepat)
+        parsed_url = urlparse(gn_link)
+        query_params = parse_qs(parsed_url.query)
+        if 'url' in query_params:
+            return query_params['url'][0]
+
+        # METODE 2 & 3: Lakukan request untuk mengikuti redirect
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        with requests.Session() as s:
+            s.headers.update(headers)
+            resp = s.get(gn_link, timeout=10, allow_redirects=True)
+            return resp.url # resp.url akan berisi URL final yang LENGKAP
+            
     except Exception:
-        return gn_link
+        return gn_link # Jika semua gagal, kembalikan link asli
 
 def get_source_from_url(url):
     try:
@@ -133,23 +145,19 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 if not search_results['entries']: continue
                     
                 for entry in search_results['entries']:
-                    # --- [LOGIKA BARU YANG DISEMPURNAKAN] ---
-                    # 1. Ambil link utama dari 'entry'
-                    real_link = entry.link
-                    # 2. Cek apakah ada 'source' di dalam 'entry', jika ada, itu link aslinya
-                    if hasattr(entry, 'source') and entry.source and 'href' in entry.source:
-                        real_link = entry.source.href
-                    # 3. (CADANGAN) Jika link masih dari google, baru jalankan fallback
-                    if "news.google.com" in real_link:
-                        real_link = get_real_url_fallback(real_link)
-                    # --- [AKHIR LOGIKA BARU] ---
+                    # --- [LOGIKA YANG DIPERBAIKI] ---
+                    # 1. Selalu mulai dari 'entry.link'
+                    gn_link = entry.link
+                    # 2. Gunakan fungsi cerdas untuk mendapatkan URL final yang lengkap
+                    real_link = get_real_url(gn_link)
+                    # --- [AKHIR PERBAIKAN] ---
                     
                     if any(d['Link'] == real_link for d in st.session_state.hasil_scraping) or "google.com" in real_link:
                         continue
 
                     judul = entry.title
                     article_text = get_article_text_with_newspaper(real_link)
-                    sumber = get_source_from_url(real_link)
+                    sumber = get_source_from_url(real_link) # Ini hanya ambil domainnya saja, sudah benar
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
                     try:
