@@ -10,29 +10,19 @@ from urllib.parse import urlparse, parse_qs
 
 
 def get_real_url(gn_link: str) -> str:
-    """Ambil URL asli artikel dari link Google News RSS."""
+    """Ubah link Google News RSS menjadi link asli panjang artikel."""
     try:
         parsed = urlparse(gn_link)
         qs = parse_qs(parsed.query)
 
-        # Kasus 1: Google News kasih param url=
+        # Kasus: link punya parameter url=artikel_asli
         if "url" in qs:
             return qs["url"][0]
 
         headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
 
-        # Kasus 2: meta refresh redirect
-        soup = BeautifulSoup(resp.text, "html.parser")
-        meta = soup.find("meta", attrs={"http-equiv": "refresh"})
-        if meta and "url=" in meta.get("content", "").lower():
-            return meta["content"].split("url=")[-1]
-
-        # Kasus 3: server kasih Location
-        if resp.history and "Location" in resp.history[-1].headers:
-            return resp.history[-1].headers["Location"]
-
-        # Default: URL final setelah redirect
+        # Kalau ada redirect, ambil URL finalnya
         return resp.url
     except Exception:
         return gn_link
@@ -158,8 +148,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     raw_link = entry.link
-                    real_url = get_real_url(raw_link)
+                    real_url = get_real_url(raw_link)   # ✅ ambil link asli panjang
 
+                    # skip duplikat
                     if any(d['Link'] == real_url for d in semua_hasil):
                         continue
 
@@ -184,14 +175,16 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                             "Nomor": len(semua_hasil) + 1,
                             "Kata Kunci": keyword,
                             "Judul": judul,
-                            "Link": real_url,  # ✅ link asli panjang
-                            "Sumber": urlparse(real_url).netloc,  # ✅ domain sumber
+                            "Link": real_url,                      # ✅ link asli panjang
+                            "Sumber": urlparse(real_url).netloc,   # ✅ domain sumber
                             "Tanggal": tanggal_str,
                             "Ringkasan": ringkasan
                         })
-            except Exception:
+            except Exception as e:
+                st.warning(f"Gagal scraping keyword {keyword}: {e}")
                 continue
 
+        # update live table
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Sumber", "Tanggal", "Ringkasan"]
@@ -201,13 +194,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 st.dataframe(df_live, use_container_width=True, height=400)
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
 
-    status_placeholder.empty()
-    keyword_placeholder.empty()
+    return semua_hasil
 
-    if semua_hasil:
-        return pd.DataFrame(semua_hasil)
-    else:
-        return pd.DataFrame()
 
 
 # --- HALAMAN-HALAMAN APLIKASI ---
