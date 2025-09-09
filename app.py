@@ -6,15 +6,17 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
+from urllib.parse import urlparse
 
-# --- Fungsi untuk ambil link asli ---
 def get_real_url(google_news_url):
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/91.0.4472.124 Safari/537.36"
         }
         resp = requests.get(google_news_url, headers=headers, timeout=10, allow_redirects=True)
-        return resp.url  # ✅ URL akhir setelah redirect (link asli panjang)
+        return resp.url   # ✅ ini link asli panjang
     except Exception:
         return google_news_url  # fallback kalau gagal
 
@@ -101,21 +103,27 @@ def ambil_ringkasan(link):
         return ""
     return ""
 
+# --- Fungsi scraping diperbarui ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                    kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-    kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist()
-                             for c in kata_kunci_lapus_df.columns}
+    from urllib.parse import urlparse
+
+    # --- Ambil daftar kata kunci ---
+    kata_kunci_lapus_dict = {
+        c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist()
+        for c in kata_kunci_lapus_df.columns
+    }
     nama_daerah = "Konawe Selatan"
-    
+
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
-    
+
     status_placeholder = st.empty()
     gn = GoogleNews(lang='id', country='ID')
-    
+
     semua_hasil = []
     total_kategori = len(kata_kunci_lapus_dict)
-    
+
     for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
@@ -123,54 +131,63 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) "
                 f"| 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}"
             )
-            
-            if pd.isna(keyword_raw): 
+
+            if pd.isna(keyword_raw):
                 continue
             keyword = str(keyword_raw).strip()
-            if not keyword: 
+            if not keyword:
                 continue
-            
+
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
-            
+
             search_query = f'"{keyword}" "{nama_daerah}"'
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
+
                 for entry in search_results['entries']:
                     raw_link = entry.link
-                    real_url = get_real_url(raw_link)  # ✅ resolve link asli
-                    
+                    real_url = get_real_url(raw_link)   # ✅ Ambil link asli panjang
+
+                    # Skip kalau duplikat
                     if any(d['Link'] == real_url for d in semua_hasil):
                         continue
 
                     judul = entry.title
                     ringkasan = ambil_ringkasan(real_url)
-                    
-                    judul_lower, ringkasan_lower, keyword_lower = (
-                        judul.lower(), ringkasan.lower(), keyword.lower()
+
+                    judul_lower = judul.lower()
+                    ringkasan_lower = ringkasan.lower()
+                    keyword_lower = keyword.lower()
+
+                    lokasi_ditemukan = any(
+                        loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter
                     )
-                    lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower
-                                           for loc in lokasi_filter)
-                    keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
+                    keyword_ditemukan = (
+                        keyword_lower in judul_lower or keyword_lower in ringkasan_lower
+                    )
 
                     if lokasi_ditemukan or keyword_ditemukan:
                         try:
-                            tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
+                            tanggal_dt = datetime.strptime(
+                                entry.published, '%a, %d %b %Y %H:%M:%S %Z'
+                            )
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
-                        
+
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1,
                             "Kata Kunci": keyword,
                             "Judul": judul,
-                            "Link": real_url,  # ✅ link asli panjang
-                            "Sumber": urlparse(real_url).netloc.replace("www.", ""),  # ✅ domain sumber
+                            "Link": real_url,  # ✅ Link asli panjang
+                            "Sumber": urlparse(real_url).netloc,  # ✅ Domain sumber
                             "Tanggal": tanggal_str,
                             "Ringkasan": ringkasan
                         })
             except Exception:
                 continue
 
+        # ✅ Update live table setiap selesai 1 kategori
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Sumber", "Tanggal", "Ringkasan"]
@@ -180,13 +197,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 st.dataframe(df_live, use_container_width=True, height=400)
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
 
-    status_placeholder.empty()
-    keyword_placeholder.empty()
-    
-    if semua_hasil:
-        return pd.DataFrame(semua_hasil)
-    else:
-        return pd.DataFrame()
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
