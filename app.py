@@ -139,7 +139,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
 
                 for entry in search_results['entries']:
-                    real_url = get_real_url(entry.link)
+                    real_url = entry.get("link")
+                    if "source" in entry:  # kadang ada sumber asli
+                        real_url = entry.source.get("href", real_url)
+                        
                     sumber = urlparse(real_url).netloc.replace("www.", "")
 
                     # skip kalau sudah ada
