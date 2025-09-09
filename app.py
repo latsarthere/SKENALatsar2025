@@ -8,17 +8,21 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
 
-def get_real_url(google_news_url):
+def get_real_url(gn_link):
+    """Ambil URL asli dari link Google News."""
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/91.0.4472.124 Safari/537.36"
-        }
-        resp = requests.get(google_news_url, headers=headers, timeout=10, allow_redirects=True)
-        return resp.url   # ✅ ini link asli panjang
+        # 1. Kalau ada parameter url= langsung ambil
+        parsed = urlparse(gn_link)
+        qs = parse_qs(parsed.query)
+        if "url" in qs:
+            return qs["url"][0]  # ✅ langsung full URL asli
+
+        # 2. Kalau tidak ada, ikuti redirect dengan requests
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
+        return resp.url  # ✅ ini juga full URL asli
     except Exception:
-        return google_news_url  # fallback kalau gagal
+        return gn_link
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -174,6 +178,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
+                        real_url = get_real_url(entry.link)              # full link asli
+sumber = urlparse(real_url).netloc.replace("www.", "")  # cuma domain
+
 
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1,
