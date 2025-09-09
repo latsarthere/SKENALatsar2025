@@ -9,7 +9,6 @@ from pygooglenews import GoogleNews
 from urllib.parse import urlparse, parse_qs
 import google.generativeai as genai
 from newspaper import Article
-import re # <-- Import baru untuk regex
 
 # --- Konfigurasi API Key Gemini ---
 try:
@@ -60,44 +59,19 @@ def get_article_text_with_newspaper(link):
     except Exception:
         return "Gagal mengambil konten artikel."
 
-# --- [FUNGSI BARU YANG LEBIH CANGGIH] ---
+# --- [PERUBAHAN] Menggunakan fungsi parsing URL yang lebih efisien ---
 def get_real_url(gn_link):
-    """
-    Mengambil URL asli dari link Google News dengan beberapa metode.
-    """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36'
-    }
-    
+    """Ekstrak link asli dari Google News RSS link dengan parsing."""
     try:
-        # Metode 1: Mengikuti redirect secara langsung (paling umum)
-        with requests.Session() as s:
-            s.headers.update(headers)
-            resp = s.get(gn_link, allow_redirects=True, timeout=10)
-            
-            # Cek jika URL final masih mengandung 'google'
-            if "google.com" not in urlparse(resp.url).netloc:
-                return resp.url
-
-            # Metode 2: Jika redirect gagal, parse HTML untuk 'meta refresh'
-            # Ini sering digunakan Google untuk redirect via HTML
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            meta_refresh = soup.find('meta', attrs={'http-equiv': 'refresh'})
-            
-            if meta_refresh:
-                content = meta_refresh.get('content', '')
-                # Ekstrak URL dari content="0;url=https://..."
-                match = re.search(r'url=(.*?)$', content, re.IGNORECASE)
-                if match:
-                    return match.group(1)
-
-        # Metode 3: Fallback jika semua gagal, kembali ke metode awal
-        # Ini untuk kasus yang sangat aneh
-        return requests.get(gn_link, timeout=10).url
-
-    except requests.RequestException as e:
-        st.warning(f"Gagal mengambil URL asli dari {gn_link[:50]}... ({e})")
-        return gn_link # Kembalikan link asli jika error
+        # Metode ini sangat cepat karena tidak butuh request jaringan
+        parsed = urlparse(gn_link)
+        qs = parse_qs(parsed.query)
+        if "url" in qs:
+            return qs["url"][0]
+    except Exception:
+        pass
+    # Fallback jika parsing gagal (seharusnya jarang terjadi)
+    return gn_link
 
 def get_source_from_url(url):
     """Mengekstrak nama sumber (domain) dari URL."""
@@ -190,7 +164,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     
                 for entry in search_results['entries']:
                     gn_link = entry.link
-                    real_link = get_real_url(gn_link) # <-- Menggunakan fungsi baru
+                    real_link = get_real_url(gn_link)
                     
                     if any(d['Link'] == real_link for d in st.session_state.hasil_scraping): continue
 
