@@ -1,13 +1,14 @@
-# Versi Final dengan requests-html
+# Versi Final Paling Stabil (Tanpa lxml)
 import streamlit as st
 import pandas as pd
 import time
 import io
+import requests
+from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 from pygooglenews import GoogleNews
 import google.generativeai as genai
-from requests_html import HTMLSession # <-- IMPORT UTAMA
 
 # --- Konfigurasi API Key Gemini ---
 try:
@@ -16,11 +17,6 @@ try:
 except (KeyError, FileNotFoundError):
     st.error("Secret 'gemini_api_key_1' tidak ditemukan. Harap tambahkan di 'Manage app' > 'Secrets'.")
     API_KEY = None
-
-# --- Konfigurasi Session untuk requests-html ---
-@st.cache_resource
-def get_html_session():
-    return HTMLSession()
 
 # --- FUNGSI-FUNGSI UTAMA ---
 @st.cache_resource
@@ -43,24 +39,29 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
         return "[Gagal meringkas]"
 
 def fetch_article_data(google_news_url):
-    session = get_html_session()
+    """
+    Metode stabil: Menggunakan requests untuk redirect & BeautifulSoup dengan html.parser.
+    """
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     try:
-        r = session.get(google_news_url, timeout=30)
-        # Jalankan JavaScript di halaman untuk memproses redirect
-        r.html.render(sleep=5, timeout=30)
-        
-        final_url = r.url
-        if "google.com" in final_url:
-            return "Gagal redirect dari Google.", google_news_url
+        # requests akan otomatis mengikuti redirect HTTP
+        response = requests.get(google_news_url, headers=headers, timeout=15)
+        response.raise_for_status()
+        final_url = response.url
 
-        article_element = r.html.find('article', first=True)
-        text = article_element.text if article_element else "Konten artikel kosong."
+        # Gunakan BeautifulSoup dengan parser bawaan Python (html.parser)
+        soup = BeautifulSoup(response.text, "html.parser")
         
-        return text[:4000], final_url
+        # Ekstrak semua teks dari tag paragraf <p>
+        paragraphs = soup.find_all('p')
+        full_text = ' '.join([p.get_text() for p in paragraphs])
+
+        text = full_text[:4000] if full_text else "Konten artikel kosong."
+        return text, final_url
     except Exception as e:
         return f"Gagal memproses link: {e}", google_news_url
 
-# (Sisa kode 95% sama, hanya pemanggilan fungsinya yang berubah)
+# (Sisa kode 95% sama)
 # --- Konfigurasi Halaman & Tampilan (CSS) ---
 st.set_page_config(page_title="SKENA", page_icon="logo skena.png", layout="wide")
 st.markdown("""<style>.block-container{padding-top:2rem} h1,h2,h3,h4,h5{color:#0073C4} [data-testid=stSidebar]{background-color:#f8f9fa}</style>""", unsafe_allow_html=True)
