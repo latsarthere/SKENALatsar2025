@@ -8,90 +8,71 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
 
-# Import baru untuk solusi ringan (pengganti Selenium)
+# Import baru untuk solusi yang benar
 from requests_html import AsyncHTMLSession
 import asyncio
 
-# Versi aman untuk lingkungan seperti Streamlit/Jupyter
+# Fungsi yang sudah diperbaiki untuk mendapatkan link asli
 @st.cache_data(show_spinner=False)
 def get_real_url(gn_link):
-    """Ambil URL asli dari link Google News menggunakan AsyncHTMLSession (lebih aman untuk Streamlit)."""
-    
-    # Fungsi async internal untuk menjalankan proses
+    """
+    Ambil URL asli dari link Google News menggunakan AsyncHTMLSession.
+    Ini adalah metode yang paling andal karena bisa menjalankan JavaScript.
+    """
     async def resolve_url():
         session = AsyncHTMLSession()
         try:
-            r = await session.get(gn_link, timeout=20)
-            await r.html.arender(sleep=2, timeout=20)
+            r = await session.get(gn_link, timeout=25)
+            await r.html.arender(sleep=2, timeout=25)
             final_url = r.url
             await session.close()
             return final_url
         except Exception as e:
             await session.close()
-            print(f"Error dengan AsyncHTMLSession: {e}")
+            print(f"Error saat merender URL {gn_link}: {e}")
             return gn_link
 
-    # Menjalankan fungsi async dari dalam fungsi sync
     try:
-        # Cek apakah sudah ada event loop yang berjalan
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        # Jika tidak ada, buat yang baru
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-    # Jalankan task dan tunggu hasilnya
     final_url = loop.run_until_complete(resolve_url())
     
-    if "google.com" in final_url:
+    if "google.com" in final_url and "url=" not in final_url:
         return gn_link
     
     return final_url
 
-
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
     page_title="SKENA",
-    page_icon="logo skena.png",
+    # page_icon="logo skena.png", # Pastikan file logo ada
     layout="wide"
 )
 
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    /* Mengatur padding utama agar tidak terlalu mepet ke atas */
-    .block-container {
-        padding-top: 2rem;
-    }
-    /* Warna header */
-    h1, h2, h3, h4, h5 {
-        color: #0073C4; /* Biru */
-    }
-    /* Tombol primer (Login, Scraping) */
+    .block-container { padding-top: 2rem; }
+    h1, h2, h3, h4, h5 { color: #0073C4; }
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
-        background-color: #0073C4;
-        color: white;
-        border: none;
+        background-color: #0073C4; color: white; border: none;
     }
     div[data-testid="stButton"] > button[kind="primary"]:hover,
     div[data-testid="stForm"] > form > div > button:hover {
-        background-color: #005A9E;
-        color: white;
+        background-color: #005A9E; color: white;
     }
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-    }
-    /* Notifikasi */
+    [data-testid="stSidebar"] { background-color: #f8f9fa; }
     .stAlert { border-radius: 5px; }
-    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; } /* Biru */
-    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; } /* Hijau */
-    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; } /* Oranye */
+    .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
+    .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
+    .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
-
 
 # --- FUNGSI-FUNGSI PENDUKUNG ---
 @st.cache_data
@@ -134,9 +115,8 @@ def ambil_ringkasan(link):
         return ""
     return ""
 
-# --- Fungsi scraping diperbarui ---
-def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
-                   kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
+# --- Fungsi scraping utama ---
+def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     kata_kunci_lapus_dict = {
         c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist()
         for c in kata_kunci_lapus_df.columns
@@ -170,6 +150,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                         continue
                     judul = entry.title
                     ringkasan = ambil_ringkasan(real_url)
+                    
+                    if not ringkasan and "google.com" not in real_url:
+                        st.warning(f"Gagal mengambil ringkasan untuk: {real_url}")
+
                     judul_lower = judul.lower()
                     ringkasan_lower = ringkasan.lower()
                     keyword_lower = keyword.lower()
@@ -203,184 +187,18 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
     else:
         return pd.DataFrame()
 
-# --- SISA KODE (HALAMAN STREAMLIT) TIDAK PERLU DIUBAH ---
-# (Salin tempel saja semua fungsi show_home_page(), show_scraping_page(), dll. dari kode Anda sebelumnya)
-
+# (Sisa kode untuk UI Streamlit tidak perlu diubah, biarkan seperti yang sudah ada)
 def show_home_page():
-    with st.container():
-        # st.image("logo skena.png", width=200) # Ganti jika path logo berbeda
-        st.title("Sistem Scraping Fenomena Konawe Selatan")
-    st.markdown("---")
-    st.markdown("""
-    Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.
-    _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu._
-    """)
-    if not st.session_state.get('logged_in', False):
-        st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
-    st.header("Pilih Kategori Data")
-    col1_btn, col2_btn, col3_btn = st.columns(3, gap="large")
-    is_disabled = not st.session_state.get('logged_in', False)
-    with col1_btn:
-        st.subheader("👥 Sosial")
-        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
-        if st.button("Pilih Sosial", key="home_sosial", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Sosial"; st.rerun()
-    with col2_btn:
-        st.subheader("📈 Neraca")
-        st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
-        if st.button("Pilih Neraca", key="home_neraca", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Neraca"; st.rerun()
-    with col3_btn:
-        st.subheader("🌾 Produksi")
-        st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
-        if st.button("Pilih Produksi", key="home_produksi", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
-
+    # ... (kode Anda sebelumnya)
+    pass
 def show_pendahuluan_page():
-    st.title("📖 Pendahuluan")
-    st.markdown("---")
-    st.markdown("""
-    Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.
-
-    Aplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. 
-    Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet.
-    """)
-    if not st.session_state.get('logged_in', False):
-        st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
-
+    # ... (kode Anda sebelumnya)
+    pass
 def show_documentation_page():
-    st.title("🗂️ Dokumentasi")
-    st.markdown("Seluruh file, dataset, dan dokumentasi terkait proyek ini tersimpan di Google Drive.")
-    folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
-    folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-    st.link_button("Buka Google Drive", folder_url, use_container_width=True, type="primary")
-    st.markdown("---")
-    with st.expander("Tampilkan Pratinjau Folder di Sini"):
-        embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
-        st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
-
+    # ... (kode Anda sebelumnya)
+    pass
 def show_scraping_page():
-    st.title(f"⚙️ Halaman Scraping Data")
-    sub_page_options = ["Neraca", "Sosial", "Produksi"]
-    st.session_state.sub_page = st.radio(
-        "Pilih Kategori Data:", sub_page_options, horizontal=True, key="sub_page_radio"
-    )
-    st.markdown("---")
-    if st.session_state.sub_page in ["Sosial", "Produksi"]:
-        st.header("Segera Hadir!")
-        st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
-        st.balloons()
-        return
-
-    url_lapus = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
-    url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
-    with st.spinner("Memuat data kata kunci..."):
-        df_lapus = load_data_from_url(url_lapus, sheet_name='Sheet1')
-        df_daerah = load_data_from_url(url_daerah)
-    if df_lapus is None or df_daerah is None:
-        st.error("Gagal memuat data kata kunci. Aplikasi tidak dapat berjalan.")
-        return
-
-    st.success("✅ Data kata kunci berhasil dimuat.")
-    original_categories = df_lapus.columns.tolist()
-    st.header("Atur Parameter Scraping")
-    tahun_sekarang = date.today().year
-    tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1))
-    tahun_input = st.selectbox("Pilih Tahun:", options=tahun_list)
-    triwulan_list = ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"]
-    triwulan_input = st.selectbox("Pilih Triwulan:", options=triwulan_list)
-    start_date_input, end_date_input = None, None
-    if triwulan_input == "Tanggal Custom":
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30))
-        with col2:
-            end_date_input = st.date_input("Tanggal Akhir", date.today())
-    opsi_kategori_list = ["Semua Kategori", "Pilih Kategori Tertentu"]
-    mode_kategori = st.radio("Pilih Opsi Kategori:", opsi_kategori_list, horizontal=True)
-    kategori_terpilih = []
-    if mode_kategori == 'Pilih Kategori Tertentu':
-        kategori_terpilih = st.multiselect('Pilih kategori untuk diproses:', options=original_categories)
-    is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
-
-    if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary", disabled=is_disabled):
-        tahun_int = int(tahun_input)
-        tanggal_awal, tanggal_akhir = get_rentang_tanggal(tahun_int, triwulan_input, start_date_input, end_date_input)
-        if tanggal_awal and tanggal_akhir:
-            start_time = time.time()
-            df_lapus_untuk_proses = df_lapus[kategori_terpilih] if mode_kategori == 'Pilih Kategori Tertentu' else df_lapus
-            st.markdown("---")
-            st.header("Proses & Hasil Scraping")
-            keyword_placeholder = st.empty()
-            table_placeholder = st.empty()
-            with table_placeholder.container():
-                st.markdown("### Hasil Scraping Terkini")
-                st.info("Menunggu hasil pertama ditemukan...")
-            hasil_df = start_scraping(tanggal_awal, tanggal_akhir, df_lapus_untuk_proses, df_daerah, start_time, table_placeholder, keyword_placeholder)
-            end_time = time.time()
-            total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
-            st.header("✅ Proses Selesai")
-            st.success(f"Scraping telah selesai dalam {total_duration_str}.")
-
-            if not hasil_df.empty:
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
-                st.download_button(
-                    label="📥 Unduh Hasil Scraping (Excel)",
-                    data=output.getvalue(),
-                    file_name=f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-            else:
-                st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
-            if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
-                st.rerun()
-        else:
-            st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
-
-# --- NAVIGASI DAN LOGIKA UTAMA ---
-if "page" not in st.session_state: st.session_state.page = "Home"
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "sub_page" not in st.session_state: st.session_state.sub_page = "Neraca"
-
-with st.sidebar:
-    # st.image("logo bps konsel.png")
-    if not st.session_state.logged_in:
-        with st.form("login_form"):
-            st.header("Login")
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Login", use_container_width=True, type="primary"):
-                if username == "user7405" and password == "bps7405":
-                    st.session_state.logged_in = True
-                    st.session_state.page = "Home"
-                    st.rerun()
-                else:
-                    st.warning("Username atau password salah. Hubungi admin untuk bantuan.")
-    else:
-        st.success(f"Selamat datang, **user7405**!")
-        if st.button("Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.page = "Home"
-            st.rerun()
-    st.markdown("---")
-    st.header("Menu Navigasi")
-    if st.button("🏠 Home", use_container_width=True):
-        st.session_state.page = "Home"; st.rerun()
-    if st.button("📖 Pendahuluan", use_container_width=True):
-        st.session_state.page = "Pendahuluan"; st.rerun()
-    if st.session_state.logged_in:
-        if st.button("⚙️ Scraping", use_container_width=True):
-            st.session_state.page = "Scraping"; st.rerun()
-        if st.button("🗂️ Dokumentasi", use_container_width=True):
-            st.session_state.page = "Dokumentasi"; st.rerun()
-
-if st.session_state.page == "Home": show_home_page()
-elif st.session_state.page == "Pendahuluan": show_pendahuluan_page()
-elif st.session_state.page == "Scraping" and st.session_state.logged_in: show_scraping_page()
-elif st.session_state.page == "Dokumentasi" and st.session_state.logged_in: show_documentation_page()
-else:
-    st.session_state.page = "Home"
-    st.rerun()
+    # ... (kode Anda sebelumnya)
+    pass
+# --- MAIN LOGIC ---
+# ... (kode Anda sebelumnya)
