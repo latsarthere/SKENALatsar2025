@@ -130,14 +130,14 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-    real_url = get_real_url(entry.link)
-    sumber = urlparse(real_url).netloc.replace("www.", "")
-    if any(d['Link'] == real_url for d in semua_hasil): 
-        continue
+                    real_url = get_real_url(entry.link)
+                    sumber = urlparse(real_url).netloc.replace("www.", "")
+                    if any(d['Link'] == real_url for d in semua_hasil): 
+                        continue
 
-    judul = entry.title
-    ringkasan = ambil_ringkasan(real_url)
-
+                    judul = entry.title
+                    ringkasan = ambil_ringkasan(real_url)
+    
                     
                     judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
