@@ -1,11 +1,10 @@
-# Versi Final dengan Link Asli
+# Versi Final dengan Kolom Sumber & Perbaikan Error
 import streamlit as st
 import pandas as pd
 import time
 import io
-import requests
-from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
+from urllib.parse import urlparse # <-- IMPORT BARU untuk kolom Sumber
 from pygooglenews import GoogleNews
 import google.generativeai as genai
 from newspaper import Article
@@ -51,9 +50,6 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
         return f"[Gagal meringkas: {e}]"
 
 def get_article_text_with_newspaper(link):
-    """
-    Mengambil teks konten utama DAN URL FINAL dari sebuah link berita.
-    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         article = Article(link, config={'headers': headers}, request_timeout=15)
@@ -149,11 +145,21 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     link = entry.link
-                    if any(d['Link Asli'] == link for d in st.session_state.hasil_scraping): continue
-
-                    judul = entry.title
                     
+                    judul = entry.title
                     article_text, link_asli = get_article_text_with_newspaper(link)
+
+                    # Cek duplikat berdasarkan link asli
+                    if any(d['Link Asli'] == link_asli for d in st.session_state.hasil_scraping): continue
+                    
+                    # Logika untuk mendapatkan nama situs sebagai "Sumber"
+                    sumber = "Tidak Dikenal"
+                    try:
+                        parsed_uri = urlparse(link_asli)
+                        domain = '{uri.netloc}'.format(uri=parsed_uri)
+                        sumber = domain.replace('www.', '')
+                    except:
+                        pass # Biarkan 'Tidak Dikenal' jika parsing gagal
                     
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
@@ -167,9 +173,12 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     st.session_state.hasil_scraping.append({
                         "Nomor": len(st.session_state.hasil_scraping) + 1,
                         "Kategori": kategori,
-                        "Kata Kunci": keyword, "Judul": judul,
+                        "Kata Kunci": keyword, 
+                        "Judul": judul,
+                        "Sumber": sumber, # <-- KOLOM BARU
                         "Link Asli": link_asli,
-                        "Tanggal": tanggal_str, "Ringkasan AI": ringkasan_ai
+                        "Tanggal": tanggal_str, 
+                        "Ringkasan AI": ringkasan_ai
                     })
             except Exception as e:
                 st.warning(f"Error saat mencari '{keyword}': {e}")
@@ -177,11 +186,11 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link Asli", "Tanggal", "Ringkasan AI"]
+            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Sumber", "Link Asli", "Tanggal", "Ringkasan AI"] # <-- KOLOM BARU DITAMBAHKAN
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
-                st.dataframe(df_live, width=None, height=400)
+                st.dataframe(df_live, height=400, use_container_width=True) # <-- PERBAIKAN ERROR
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
 
     status_placeholder.empty()
@@ -194,6 +203,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
 
 # --- HALAMAN-HALAMAN APLIKASI ---
+# (Sisa kode dari sini ke bawah tidak ada perubahan)
 def set_page(page_name):
     st.session_state.page = page_name
 
@@ -259,7 +269,7 @@ def show_documentation_page():
     
     folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-    st.link_button("Buka Google Drive", folder_url, type="primary")
+    st.link_button("Buka Google Drive", folder_url, type="primary", use_container_width=True)
     
     st.markdown("---")
     
@@ -328,7 +338,7 @@ def show_scraping_page():
 
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
-    if st.button("🚀 Mulai Scraping", width='stretch', type="primary", disabled=is_disabled):
+    if st.button("🚀 Mulai Scraping", type="primary", use_container_width=True, disabled=is_disabled):
         st.session_state.hasil_scraping = []
         
         tahun_int = int(tahun_input)
@@ -374,19 +384,19 @@ def show_scraping_page():
                     data=output.getvalue(),
                     file_name=nama_file_baru,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    width='stretch'
+                    use_container_width=True
                 )
             else:
                 st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
 
-            if st.button("🔄 Mulai Scraping Baru (Reset)", width='stretch'):
+            if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
                 if 'hasil_scraping' in st.session_state:
                     del st.session_state.hasil_scraping
                 st.rerun()
         else:
             st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
 
-# --- NAVIGasi DAN LOGIKA UTAMA ---
+# --- NAVIGASI DAN LOGIKA UTAMA ---
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 if "logged_in" not in st.session_state:
@@ -402,7 +412,7 @@ with st.sidebar:
             st.header("Login")
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
-            if st.form_submit_button("Login", width='stretch', type="primary"):
+            if st.form_submit_button("Login", type="primary", use_container_width=True):
                 if username == "user7405" and password == "bps7405":
                     st.session_state.logged_in = True
                     st.session_state.page = "Home"
@@ -411,7 +421,7 @@ with st.sidebar:
                     st.warning("Username atau password salah. Hubungi admin untuk bantuan.")
     else:
         st.success(f"Selamat datang, **user7405**!")
-        if st.button("Logout", width='stretch'):
+        if st.button("Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.page = "Home"
             st.rerun()
@@ -419,17 +429,17 @@ with st.sidebar:
     st.markdown("---")
     st.header("Menu Navigasi")
     
-    if st.button("🏠 Home", width='stretch'):
+    if st.button("🏠 Home", use_container_width=True):
         set_page("Home"); st.rerun()
         
-    if st.button("📖 Pendahuluan", width='stretch'):
+    if st.button("📖 Pendahuluan", use_container_width=True):
         set_page("Pendahuluan"); st.rerun()
 
     if st.session_state.logged_in:
-        if st.button("⚙️ Scraping", width='stretch'):
+        if st.button("⚙️ Scraping", use_container_width=True):
             set_page("Scraping"); st.rerun()
         
-        if st.button("🗂️ Dokumentasi", width='stretch'):
+        if st.button("🗂️ Dokumentasi", use_container_width=True):
             set_page("Dokumentasi"); st.rerun()
 
 if st.session_state.page == "Home":
