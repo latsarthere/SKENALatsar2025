@@ -1,31 +1,29 @@
-# Versi Final dengan requests-html
+# Versi Final dengan metode scraping HTML
 import streamlit as st
 import pandas as pd
 import time
 import io
+import requests
+from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 from pygooglenews import GoogleNews
 import google.generativeai as genai
-from requests_html import HTMLSession # <-- IMPORT BARU
+from newspaper import Article
 
 # --- Konfigurasi API Key Gemini ---
 try:
-    API_KEYS = [st.secrets["gemini_api_key_1"]]
+    API_KEY = st.secrets["gemini_api_key_1"]
+    genai.configure(api_key=API_KEY)
 except (KeyError, FileNotFoundError):
     st.error("Secret 'gemini_api_key_1' tidak ditemukan. Harap tambahkan di 'Manage app' > 'Secrets'.")
-    API_KEYS = []
-
-# --- Konfigurasi Session untuk requests-html ---
-@st.cache_resource
-def get_html_session():
-    return HTMLSession()
+    API_KEY = None
 
 # --- FUNGSI-FUNGSI UTAMA ---
+@st.cache_resource
 def get_gemini_model():
-    if not API_KEYS: return None
+    if not API_KEY: return None
     try:
-        genai.configure(api_key=API_KEYS[0])
         return genai.GenerativeModel("gemini-1.5-flash")
     except Exception as e:
         st.warning(f"Gagal mengkonfigurasi API Key: {e}")
@@ -33,10 +31,10 @@ def get_gemini_model():
 
 def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
     model = get_gemini_model()
-    if not model or not text.strip() or "Gagal" in text or "Konten artikel kosong" in text:
+    if not model or not text or "Gagal" in text or "Konten artikel kosong" in text:
         return "TIDAK RELEVAN"
     prompt = (
-        f"Buat paragraf ringkas dalam 2 kalimat (maks 40 kata) fokus pada topik '{usaha}' di '{wilayah}'. "
+        f"Buat paragraf ringkas 2 kalimat (maks 40 kata) fokus pada topik '{usaha}' di '{wilayah}'. "
         f"Jika teks tidak relevan, tulis HANYA 'TIDAK RELEVAN'.\n\nTeks: {text}"
     )
     try:
@@ -44,26 +42,35 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
     except Exception:
         return "[Gagal meringkas]"
 
-def fetch_article_data_with_requests_html(google_news_url):
+def get_final_url_from_google(google_url):
     """
-    Fungsi baru menggunakan requests-html untuk menangani JavaScript redirect.
+    Metode ringan untuk mengambil URL asli dari halaman redirect Google News.
     """
-    session = get_html_session()
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     try:
-        r = session.get(google_news_url, timeout=20)
-        # Jalankan JavaScript di halaman untuk memproses redirect
-        r.html.render(sleep=5, timeout=20)
-        
-        # Ambil URL final dan teks utama
-        final_url = r.url
-        article_element = r.html.find('article', first=True)
-        text = article_element.text if article_element else "Konten artikel kosong."
-        
-        return text[:4000], final_url
-    except Exception as e:
-        return f"Gagal memproses link: {e}", google_news_url
+        response = requests.get(google_url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        # Link asli biasanya ada di dalam tag 'a' pertama
+        link_tag = soup.find("a")
+        if link_tag and link_tag.get("href"):
+            return link_tag.get("href")
+    except Exception:
+        pass
+    return google_url # Kembalikan link asli jika gagal
 
-# (Sisa kode dari sini ke bawah 99% sama, hanya pemanggilan fungsinya yang berubah)
+def get_article_text(final_url):
+    """
+    Mengambil teks artikel dari URL yang sudah final menggunakan newspaper4k.
+    """
+    try:
+        article = Article(final_url)
+        article.download()
+        article.parse()
+        return article.text[:4000] if article.text else "Konten artikel kosong."
+    except Exception:
+        return "Gagal mengambil konten artikel."
+
+# (Sisa kode 95% sama, hanya perubahan kecil di fungsi start_scraping)
 
 # --- Konfigurasi Halaman & Tampilan (CSS) ---
 st.set_page_config(page_title="SKENA", page_icon="logo skena.png", layout="wide")
@@ -109,18 +116,18 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link = entry.link
+                    link_google = entry.link
                     judul = entry.title
                     
-                    # Ganti pemanggilan fungsi di sini
-                    article_text, link_asli = fetch_article_data_with_requests_html(link)
-
+                    # Langkah 1: Dapatkan link asli dari link Google
+                    link_asli = get_final_url_from_google(link_google)
+                    
                     if any(d['Link Asli'] == link_asli for d in st.session_state.hasil_scraping): continue
                     
-                    sumber = "Tidak Dikenal"
-                    try:
-                        sumber = urlparse(link_asli).netloc.replace('www.', '')
-                    except: pass
+                    # Langkah 2: Ambil teks dari link asli
+                    article_text = get_article_text(link_asli)
+                    
+                    sumber = urlparse(link_asli).netloc.replace('www.', '') if link_asli else "Tidak Dikenal"
                     
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
