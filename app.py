@@ -380,7 +380,7 @@ with st.sidebar:
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login", use_container_width=True, type="primary"):
-                if username == "user7045" and password == "bps7045": # Ganti username & pass
+                if username == "user7405" and password == "bps7405": # Ganti username & pass
                     st.session_state.logged_in = True
                     st.session_state.page = "Home"
                     st.rerun()
