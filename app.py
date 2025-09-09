@@ -12,18 +12,31 @@ from urllib.parse import urlparse, parse_qs
 def get_real_url(gn_link):
     """Ambil URL asli dari link Google News."""
     try:
-        # 1. Kalau ada parameter url= langsung ambil
         parsed = urlparse(gn_link)
         qs = parse_qs(parsed.query)
         if "url" in qs:
-            return qs["url"][0]
+            return qs["url"][0]  # ✅ URL asli kalau ada param url=
 
-        # 2. Kalau tidak ada, ikuti redirect dengan requests
         headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
-        return resp.url
+        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=False)
+
+        # cek meta refresh di body (kadang Google pakai cara ini)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        meta = soup.find("meta", attrs={"http-equiv": "refresh"})
+        if meta and "url=" in meta.get("content", "").lower():
+            redirect_url = meta["content"].split("url=")[-1]
+            return redirect_url
+
+        # kalau server kasih Location di header (redirect manual)
+        if "Location" in resp.headers:
+            return resp.headers["Location"]
+
+        # fallback: kalau tetap gagal, biarkan requests follow
+        resp2 = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
+        return resp2.url
     except Exception:
         return gn_link
+
         
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
