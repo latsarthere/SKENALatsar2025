@@ -179,7 +179,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
                         real_url = get_real_url(entry.link)              # full link asli
-sumber = urlparse(real_url).netloc.replace("www.", "")  # cuma domain
+                        sumber = urlparse(real_url).netloc.replace("www.", "")  # cuma domain
 
 
                         semua_hasil.append({
