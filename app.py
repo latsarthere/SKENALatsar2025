@@ -1,4 +1,4 @@
-# Versi Lengkap dengan Trafilatura
+# Versi Final dengan Trafilatura dan Perbaikan Width
 import streamlit as st
 import pandas as pd
 import time
@@ -8,9 +8,10 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 import google.generativeai as genai
-import trafilatura # <-- IMPORT BARU
+import trafilatura
 
 # --- Konfigurasi API Key Gemini ---
+# Kode ini membaca dari Secrets Manager di dashboard Streamlit Cloud Anda
 try:
     API_KEYS = [
         st.secrets["gemini_api_key_1"]
@@ -22,8 +23,9 @@ except (KeyError, FileNotFoundError):
     current_key_idx = 0
 
 
-# --- FUNGSI-FUNGSI BARU & YANG DIPERBARUI ---
+# --- FUNGSI-FUNGSI UTAMA ---
 def get_rotating_model():
+    """Mengambil model Gemini."""
     if not API_KEYS:
         return None
     key = API_KEYS[0]
@@ -35,6 +37,7 @@ def get_rotating_model():
         return None
 
 def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
+    """Membuat ringkasan relevan menggunakan Gemini AI."""
     model = get_rotating_model()
     if not model or not text.strip() or "Gagal mengambil konten" in text or "Konten artikel kosong" in text:
         return "TIDAK RELEVAN"
@@ -53,7 +56,6 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
 def get_article_text_with_trafilatura(link):
     """
     Mengambil teks konten utama dari link berita menggunakan Trafilatura.
-    Ini adalah alternatif yang lebih modern dan seringkali lebih andal.
     """
     try:
         downloaded = trafilatura.fetch_url(link)
@@ -151,10 +153,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
                     judul = entry.title
                     
-                    # Mengambil teks artikel dengan Trafilatura
                     article_text = get_article_text_with_trafilatura(link)
                     
-                    # Meringkas teks dengan Gemini
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
                     if ringkasan_ai != "TIDAK RELEVAN":
@@ -197,7 +197,7 @@ def set_page(page_name):
     st.session_state.page = page_name
 
 def show_home_page():
-    st.image("logo skena full.png", width=None)
+    st.image("logo skena full.png", width='stretch')
     st.markdown("---")
     
     st.markdown("""
@@ -258,7 +258,7 @@ def show_documentation_page():
     
     folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-    st.link_button("Buka Google Drive", folder_url, width='stretch', type="primary")
+    st.link_button("Buka Google Drive", folder_url, type="primary")
     
     st.markdown("---")
     
