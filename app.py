@@ -7,6 +7,34 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 
+def get_real_url(gn_link):
+    """Ambil URL asli artikel dari link Google News RSS."""
+    try:
+        parsed = urlparse(gn_link)
+        qs = parse_qs(parsed.query)
+
+        # ✅ Kasus 1: Google News kadang kasih param url=
+        if "url" in qs:
+            return qs["url"][0]
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
+
+        # ✅ Kasus 2: meta refresh redirect
+        soup = BeautifulSoup(resp.text, "html.parser")
+        meta = soup.find("meta", attrs={"http-equiv": "refresh"})
+        if meta and "url=" in meta.get("content", "").lower():
+            return meta["content"].split("url=")[-1]
+
+        # ✅ Kasus 3: server kasih Location
+        if resp.history and "Location" in resp.history[-1].headers:
+            return resp.history[-1].headers["Location"]
+
+        # ✅ Default: balikin URL setelah semua redirect
+        return resp.url
+    except Exception:
+        return gn_link
+
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
     page_title="SKENA",
