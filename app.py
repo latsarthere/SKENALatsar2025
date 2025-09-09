@@ -18,28 +18,22 @@ except (KeyError, FileNotFoundError):
     st.error("File secrets.toml atau API key 'gemini_api_key_1' di dalamnya tidak ditemukan.")
     API_KEY = None
 
-# --- FUNGSI-FUNGSI BARU & YANG DIPERBARUI ---
-
+# --- FUNGSI-FUNGSI PENDUKUNG ---
 def get_gemini_model():
-    """Mengambil model Gemini jika API key tersedia."""
-    if not API_KEY:
-        st.error("Tidak ada Gemini API Key yang dikonfigurasi.")
-        return None
+    if not API_KEY: return None
     try:
         return genai.GenerativeModel("gemini-1.5-flash")
-    except Exception as e:
-        st.warning(f"Gagal mengkonfigurasi model Gemini: {e}")
+    except Exception:
         return None
 
 def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
-    """Membuat ringkasan relevan menggunakan Gemini AI."""
     model = get_gemini_model()
-    if not model or not text or not text.strip() or "Gagal mengambil konten" in text or "Konten artikel kosong" in text:
+    if not model or not text or not text.strip() or "Gagal" in text or "kosong" in text:
         return "TIDAK RELEVAN (Konten Kosong)"
 
     prompt = (
         f"Analisis teks berikut. Buat ringkasan padu dalam 1-2 kalimat (maksimal 40 kata) yang fokus pada topik '{usaha}' di wilayah '{wilayah}'. "
-        f"Jika teks sama sekali tidak membahas topik tersebut atau fenomena ekonomi terkait di wilayah itu, tulis HANYA 'TIDAK RELEVAN'.\n\n"
+        f"Jika teks sama sekali tidak membahas topik tersebut, tulis HANYA 'TIDAK RELEVAN'.\n\n"
         f"Teks:\n---\n{text}\n---"
     )
     try:
@@ -49,9 +43,8 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
         return "[Gagal Meringkas oleh AI]"
 
 def get_article_text_with_newspaper(link):
-    """Mengambil teks konten utama dari link berita menggunakan newspaper3k."""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         article = Article(link, config={'headers': headers}, request_timeout=15)
         article.download()
         article.parse()
@@ -59,27 +52,27 @@ def get_article_text_with_newspaper(link):
     except Exception:
         return "Gagal mengambil konten artikel."
 
-# --- [PERUBAHAN] Menggunakan fungsi parsing URL yang lebih efisien ---
+# --- [PERUBAHAN] Menggunakan fungsi gabungan yang kamu sarankan ---
 def get_real_url(gn_link):
-    """Ekstrak link asli dari Google News RSS link dengan parsing."""
+    """Ambil URL asli dari link Google News dengan metode gabungan."""
     try:
-        # Metode ini sangat cepat karena tidak butuh request jaringan
+        # Metode 1: Coba parsing parameter 'url' (sangat cepat)
         parsed = urlparse(gn_link)
         qs = parse_qs(parsed.query)
         if "url" in qs:
             return qs["url"][0]
+
+        # Metode 2: Jika parsing gagal, ikuti redirect (cadangan)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
+        return resp.url
     except Exception:
-        pass
-    # Fallback jika parsing gagal (seharusnya jarang terjadi)
-    return gn_link
+        return gn_link # Fallback jika semua gagal
 
 def get_source_from_url(url):
-    """Mengekstrak nama sumber (domain) dari URL."""
     try:
         netloc = urlparse(url).netloc
-        if netloc.startswith('www.'):
-            return netloc[4:]
-        return netloc
+        return netloc.replace('www.', '')
     except Exception:
         return "Tidak Diketahui"
 
@@ -109,7 +102,6 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-
 # --- FUNGSI-FUNGSI PENDUKUNG LAINNYA ---
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
@@ -132,7 +124,6 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
         "Triwulan 4": (f"{tahun}-10-01", f"{tahun}-12-31"),
     }
     return triwulan_map.get(triwulan, (None, None))
-
 
 # --- FUNGSI UTAMA SCRAPING ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
@@ -164,15 +155,13 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     
                 for entry in search_results['entries']:
                     gn_link = entry.link
-                    real_link = get_real_url(gn_link)
+                    real_link = get_real_url(gn_link) # <-- Menggunakan fungsi gabungan baru
                     
                     if any(d['Link'] == real_link for d in st.session_state.hasil_scraping): continue
 
                     judul = entry.title
-                    
                     article_text = get_article_text_with_newspaper(real_link)
                     sumber = get_source_from_url(real_link)
-                    
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
                     try:
@@ -182,13 +171,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         tanggal_str = "N/A"
                     
                     st.session_state.hasil_scraping.append({
-                        "Nomor": len(st.session_state.hasil_scraping) + 1,
-                        "Judul": judul,
-                        "Sumber": sumber,
-                        "Link": real_link,
-                        "Tanggal": tanggal_str,
-                        "Ringkasan AI": ringkasan_ai,
-                        "Teks Mentah": article_text
+                        "Nomor": len(st.session_state.hasil_scraping) + 1, "Judul": judul,
+                        "Sumber": sumber, "Link": real_link, "Tanggal": tanggal_str,
+                        "Ringkasan AI": ringkasan_ai, "Teks Mentah": article_text
                     })
 
             except Exception as e:
@@ -197,24 +182,19 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            
             kolom_urut = ["Nomor", "Judul", "Sumber", "Tanggal", "Link", "Ringkasan AI", "Teks Mentah"]
             df_live_display = df_live[kolom_urut]
-            
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping (Mode Debug)")
                 st.dataframe(df_live_display, use_container_width=True, height=400)
-                st.caption(f"Total berita ditemukan dan diproses: {len(df_live)}")
+                st.caption(f"Total berita ditemukan: {len(df_live)}")
 
     status_placeholder.empty()
     keyword_placeholder.empty()
-    
     final_results = [res for res in st.session_state.hasil_scraping if "TIDAK RELEVAN" not in res["Ringkasan AI"]]
-    
     return pd.DataFrame(final_results) if final_results else pd.DataFrame()
 
-
-# --- HALAMAN-HALAMAN APLIKASI (Tidak ada perubahan di bawah sini) ---
+# --- HALAMAN-HALAMAN APLIKASI (Tidak ada perubahan) ---
 def set_page(page_name):
     st.session_state.page = page_name
 
@@ -267,7 +247,6 @@ def show_pendahuluan_page():
     st.markdown("---")
     st.markdown("""
     Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.
-
     Aplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. 
     Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet.
     """)
