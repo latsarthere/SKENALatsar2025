@@ -9,29 +9,21 @@ from pygooglenews import GoogleNews
 from urllib.parse import urlparse, parse_qs
 
 
-def get_real_url(google_url: str) -> str:
-    """Ambil link asli dari link news.google.com"""
+def get_real_url(gn_link):
+    """Ambil URL asli dari link Google News."""
     try:
-        # 1. Kalau ada query ?url= (kadang muncul di Google Search, jarang di RSS)
-        parsed = urlparse(google_url)
-        query = parse_qs(parsed.query)
-        if "url" in query:
-            return query["url"][0]
+        # 1. Kalau ada parameter url= langsung ambil
+        parsed = urlparse(gn_link)
+        qs = parse_qs(parsed.query)
+        if "url" in qs:
+            return qs["url"][0]
 
-        # 2. Ikuti redirect normal
-        r = requests.get(google_url, timeout=10, allow_redirects=True)
-        final_url = r.url
-
-        # 3. Kalau masih news.google.com, coba cari <link rel="canonical">
-        if "news.google.com" in final_url:
-            soup = BeautifulSoup(r.text, "html.parser")
-            canonical = soup.find("link", rel="canonical")
-            if canonical and canonical.get("href"):
-                return canonical["href"]
-
-        return final_url
+        # 2. Kalau tidak ada, ikuti redirect dengan requests
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
+        return resp.url
     except Exception:
-        return google_url
+        return gn_link
         
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -147,7 +139,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
 
                 for entry in search_results['entries']:
-                    real_url = get_real_url(entry.link)   # ✅ link asli
+                    real_url = get_real_url(entry.link)
                     sumber = urlparse(real_url).netloc.replace("www.", "")
 
                     # skip kalau sudah ada
