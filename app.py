@@ -7,33 +7,16 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 
-def get_real_url(gn_link):
-    """Ambil URL asli artikel dari link Google News RSS."""
+# --- Fungsi untuk ambil link asli ---
+def get_real_url(google_news_url):
     try:
-        parsed = urlparse(gn_link)
-        qs = parse_qs(parsed.query)
-
-        # ✅ Kasus 1: Google News kadang kasih param url=
-        if "url" in qs:
-            return qs["url"][0]
-
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
-
-        # ✅ Kasus 2: meta refresh redirect
-        soup = BeautifulSoup(resp.text, "html.parser")
-        meta = soup.find("meta", attrs={"http-equiv": "refresh"})
-        if meta and "url=" in meta.get("content", "").lower():
-            return meta["content"].split("url=")[-1]
-
-        # ✅ Kasus 3: server kasih Location
-        if resp.history and "Location" in resp.history[-1].headers:
-            return resp.history[-1].headers["Location"]
-
-        # ✅ Default: balikin URL setelah semua redirect
-        return resp.url
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        resp = requests.get(google_news_url, headers=headers, timeout=10, allow_redirects=True)
+        return resp.url  # ✅ URL akhir setelah redirect (link asli panjang)
     except Exception:
-        return gn_link
+        return google_news_url  # fallback kalau gagal
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -118,8 +101,10 @@ def ambil_ringkasan(link):
         return ""
     return ""
 
-def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-    kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
+def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
+                   kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
+    kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist()
+                             for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
     
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
@@ -134,11 +119,16 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
-            status_placeholder.info(f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
+            status_placeholder.info(
+                f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) "
+                f"| 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}"
+            )
             
-            if pd.isna(keyword_raw): continue
+            if pd.isna(keyword_raw): 
+                continue
             keyword = str(keyword_raw).strip()
-            if not keyword: continue
+            if not keyword: 
+                continue
             
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
             
@@ -146,14 +136,20 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link = entry.link
-                    if any(d['Link'] == link for d in semua_hasil): continue
+                    raw_link = entry.link
+                    real_url = get_real_url(raw_link)  # ✅ resolve link asli
+                    
+                    if any(d['Link'] == real_url for d in semua_hasil):
+                        continue
 
                     judul = entry.title
-                    ringkasan = ambil_ringkasan(link)
+                    ringkasan = ambil_ringkasan(real_url)
                     
-                    judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
-                    lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
+                    judul_lower, ringkasan_lower, keyword_lower = (
+                        judul.lower(), ringkasan.lower(), keyword.lower()
+                    )
+                    lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower
+                                           for loc in lokasi_filter)
                     keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
 
                     if lokasi_ditemukan or keyword_ditemukan:
@@ -164,15 +160,20 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = "N/A"
                         
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
+                            "Nomor": len(semua_hasil) + 1,
+                            "Kata Kunci": keyword,
+                            "Judul": judul,
+                            "Link": real_url,  # ✅ link asli panjang
+                            "Sumber": urlparse(real_url).netloc.replace("www.", ""),  # ✅ domain sumber
+                            "Tanggal": tanggal_str,
+                            "Ringkasan": ringkasan
                         })
             except Exception:
                 continue
 
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
-            kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan"]
+            kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Sumber", "Tanggal", "Ringkasan"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
