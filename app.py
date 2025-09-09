@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs # Ditambahkan parse_qs
 
 def get_real_url(gn_link):
     """Ambil URL asli dari link Google News."""
@@ -110,7 +110,6 @@ def ambil_ringkasan(link):
 # --- Fungsi scraping diperbarui ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                    kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-    from urllib.parse import urlparse
 
     # --- Ambil daftar kata kunci ---
     kata_kunci_lapus_dict = {
@@ -149,10 +148,12 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
 
                 for entry in search_results['entries']:
-                    raw_link = entry.link
-                    real_url = get_real_url(raw_link)   # ✅ Ambil link asli panjang
+                    # =================== PERUBAHAN DIMULAI DI SINI ===================
 
-                    # Skip kalau duplikat
+                    raw_link = entry.link
+                    real_url = get_real_url(raw_link)  # Ambil URL asli/tujuan akhir
+
+                    # Periksa duplikat berdasarkan URL tujuan akhir (real_url)
                     if any(d['Link'] == real_url for d in semua_hasil):
                         continue
 
@@ -178,23 +179,24 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
-                        real_url = get_real_url(entry.link)              # full link asli
-                        sumber = urlparse(real_url).netloc.replace("www.", "")  # cuma domain
-
+                        
+                        sumber = urlparse(real_url).netloc.replace("www.", "")
 
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1,
                             "Kata Kunci": keyword,
                             "Judul": judul,
-                            "Link": real_url,  # ✅ Link asli panjang
-                            "Sumber": urlparse(real_url).netloc,  # ✅ Domain sumber
+                            # MODIFIKASI: Kolom Link diisi dengan URL tujuan akhir (real_url)
+                            "Link": real_url,
+                            "Sumber": sumber,
                             "Tanggal": tanggal_str,
                             "Ringkasan": ringkasan
                         })
+                    # =================== AKHIR DARI PERUBAHAN ===================
             except Exception:
                 continue
 
-        # ✅ Update live table setiap selesai 1 kategori
+        # Update live table setiap selesai 1 kategori
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Sumber", "Tanggal", "Ringkasan"]
@@ -203,9 +205,16 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df,
                 st.markdown("### Hasil Scraping Terkini")
                 st.dataframe(df_live, use_container_width=True, height=400)
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
+    
+    # Selesai scraping, kembalikan hasil akhir dalam bentuk DataFrame
+    if semua_hasil:
+        return pd.DataFrame(semua_hasil)
+    else:
+        return pd.DataFrame()
 
 
 # --- HALAMAN-HALAMAN APLIKASI ---
+# (Bagian kode ini sama seperti sebelumnya, tidak ada perubahan)
 
 def show_home_page():
     # --- [DIUBAH] Tata letak halaman Home menjadi lebih rapi ---
