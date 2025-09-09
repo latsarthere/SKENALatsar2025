@@ -75,7 +75,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     return triwulan_map.get(triwulan, (None, None))
 
 # --- [PERUBAHAN 1] ---
-# Fungsi ini diubah untuk mengembalikan URL final dan Ringkasan
+# Fungsi 'ambil_ringkasan' diganti dengan fungsi ini yang lebih baik
 def ekstrak_info_artikel(link_google):
     """
     Mengunjungi link Google, mengambil URL final dan ringkasan artikel.
@@ -83,12 +83,13 @@ def ekstrak_info_artikel(link_google):
     """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(link_google, timeout=10, headers=headers)
+        # Allow redirects akan mengikuti link google ke tujuan akhir
+        response = requests.get(link_google, timeout=10, headers=headers, allow_redirects=True)
         response.raise_for_status()
-        
-        # Ini adalah URL tujuan setelah redirect
+
+        # URL final adalah URL tujuan setelah pengalihan
         url_final = response.url
-        
+
         soup = BeautifulSoup(response.text, 'html.parser')
         ringkasan = ""
         
@@ -136,10 +137,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 for entry in search_results['entries']:
                     
                     # --- [PERUBAHAN 2] ---
-                    # Panggil fungsi baru dan gunakan hasilnya
+                    # Panggil fungsi baru untuk dapatkan link final dan ringkasan
                     link_final, ringkasan = ekstrak_info_artikel(entry.link)
 
-                    # Jika link gagal diakses atau sudah ada, lewati
+                    # Jika link gagal diakses (None) atau link final sudah ada di hasil, lewati.
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil):
                         continue
 
@@ -156,13 +157,13 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
                         
+                        # Simpan link_final, bukan link google
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link_final,  # Simpan link final
+                            "Link": link_final,
                             "Tanggal": tanggal_str, "Ringkasan": ringkasan
                         })
-            except Exception as e:
-                # st.warning(f"Error saat mencari: {e}") # Uncomment untuk debug
+            except Exception:
                 continue
 
         if semua_hasil:
@@ -171,6 +172,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
+                # --- [PERUBAHAN 3] ---
+                # Pastikan menggunakan column_config agar link bisa diklik
                 st.dataframe(
                     df_live,
                     use_container_width=True,
@@ -180,8 +183,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             "Link Berita",
                             help="Klik untuk membuka tautan berita di tab baru.",
                             width="large"
-                        ),
-                        "Ringkasan": st.column_config.TextColumn(width="medium"),
+                        )
                     }
                 )
                 st.caption(f"Total berita ditemukan: {len(df_live)}")
@@ -194,7 +196,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     else:
         return pd.DataFrame()
 
-# --- HALAMAN-HALAMAN APLIKASI ---
+# --- HALAMAN-HALAMAN APLIKASI --- (Tidak ada perubahan di bawah sini)
 
 def show_home_page():
     with st.container():
@@ -293,7 +295,7 @@ def show_scraping_page():
     st.header("Atur Parameter Scraping")
     
     tahun_sekarang = date.today().year
-    tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 2)) # Ditambah 2 untuk tahun depan
+    tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1))
     tahun_input = st.selectbox("Pilih Tahun:", options=tahun_list)
     triwulan_list = ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"]
     triwulan_input = st.selectbox("Pilih Triwulan:", options=triwulan_list)
@@ -380,14 +382,14 @@ with st.sidebar:
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login", use_container_width=True, type="primary"):
-                if username == "user7405" and password == "bps7405": # Ganti username & pass
+                if username == "user7405" and password == "bps7405":
                     st.session_state.logged_in = True
                     st.session_state.page = "Home"
                     st.rerun()
                 else:
                     st.warning("Username atau password salah. Hubungi admin untuk bantuan.")
     else:
-        st.success(f"Selamat datang, **Admin**!") # Ganti nama user
+        st.success(f"Selamat datang, **user7405**!")
         if st.button("Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.page = "Home"
