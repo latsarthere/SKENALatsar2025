@@ -12,7 +12,7 @@ from urllib.parse import urlparse, parse_qs
 def get_real_url(google_url: str) -> str:
     """Ambil link asli dari link news.google.com"""
     try:
-        # 1. Kalau ada query ?url= (jarang di RSS, sering di Search)
+        # 1. Kalau ada query ?url= (kadang muncul di Google Search, jarang di RSS)
         parsed = urlparse(google_url)
         query = parse_qs(parsed.query)
         if "url" in query:
@@ -30,10 +30,9 @@ def get_real_url(google_url: str) -> str:
                 return canonical["href"]
 
         return final_url
-    except Exception as e:
-        print(f"Error ambil real url: {e}")
+    except Exception:
         return google_url
-
+        
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
     page_title="SKENA",
@@ -117,86 +116,90 @@ def ambil_ringkasan(link):
         return ""
     return ""
 
-def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-    kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
+def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df,
+                   start_time, table_placeholder, keyword_placeholder):
+    from pygooglenews import GoogleNews
+    gn = GoogleNews(lang='id', country='ID')
+
+    semua_hasil = []
     nama_daerah = "Konawe Selatan"
-    
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
-    
+
+    total_kategori = len(kata_kunci_lapus_df.columns)
     status_placeholder = st.empty()
-    gn = GoogleNews(lang='id', country='ID')
-    
-    semua_hasil = []
-    total_kategori = len(kata_kunci_lapus_dict)
-    
-    for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
-        for keyword_raw in kata_kunci_list:
-            elapsed_time = time.time() - start_time
-            status_placeholder.info(f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
-            
-            if pd.isna(keyword_raw): continue
+
+    for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_df.items(), 1):
+        for keyword_raw in kata_kunci_list.dropna():
             keyword = str(keyword_raw).strip()
-            if not keyword: continue
-            
-            keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
-            
-            search_query = f'"{keyword}" "{nama_daerah}"'
+            if not keyword:
+                continue
+
+            elapsed_time = time.time() - start_time
+            status_placeholder.info(
+                f"⏳ Proses... ({int(elapsed_time // 60)}m {int(elapsed_time % 60)}d) "
+                f"| 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}"
+            )
+            keyword_placeholder.text(f"➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
+
             try:
+                search_query = f'"{keyword}" "{nama_daerah}"'
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
+
                 for entry in search_results['entries']:
-                    real_url = get_real_url(entry.link)
+                    real_url = get_real_url(entry.link)   # ✅ link asli
                     sumber = urlparse(real_url).netloc.replace("www.", "")
-                    if any(d['Link'] == real_url for d in semua_hasil): 
+
+                    # skip kalau sudah ada
+                    if any(d['Link'] == real_url for d in semua_hasil):
                         continue
 
                     judul = entry.title
                     ringkasan = ambil_ringkasan(real_url)
-    
-                    
-                    judul_lower, ringkasan_lower, keyword_lower = judul.lower(), ringkasan.lower(), keyword.lower()
+
+                    # filter lokasi / keyword
+                    judul_lower, ringkasan_lower = judul.lower(), ringkasan.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
-                    keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
+                    keyword_ditemukan = keyword.lower() in judul_lower or keyword.lower() in ringkasan_lower
 
                     if lokasi_ditemukan or keyword_ditemukan:
                         try:
                             tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
-                        except (ValueError, TypeError):
-                            tanggal_str = "N/A"
-                        
+                        except Exception:
+                            tanggal_str = entry.published
+
                         semua_hasil.append({
-    "Nomor": len(semua_hasil) + 1,
-    "Kata Kunci": keyword,
-    "Judul": judul,
-    "Link": real_url,   
-    "Sumber": sumber,  
-    "Tanggal": tanggal_str,
-    "Ringkasan": ringkasan
-})
-
-
+                            "Nomor": len(semua_hasil) + 1,
+                            "Kata Kunci": keyword,
+                            "Judul": judul,
+                            "Link": real_url,    # ✅ asli (detik/tribun/dll)
+                            "Sumber": sumber,    # ✅ nama domain
+                            "Tanggal": tanggal_str,
+                            "Ringkasan": ringkasan
+                        })
 
             except Exception:
                 continue
 
+        # update live table
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
             kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Sumber", "Tanggal", "Ringkasan"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
-                st.dataframe(df_live, use_container_width=True, height=400)  # untuk tampilan biasa
+                st.dataframe(df_live, use_container_width=True, height=400)
                 st.caption("Klik link di kolom 'Link' untuk membuka berita.")
-
 
     status_placeholder.empty()
     keyword_placeholder.empty()
-    
+
     if semua_hasil:
         return pd.DataFrame(semua_hasil)
     else:
         return pd.DataFrame()
+
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 
