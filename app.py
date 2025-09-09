@@ -136,9 +136,14 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = "N/A"
                         
                         semua_hasil.append({
-                            "Nomor": len(semua_hasil) + 1, "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan": ringkasan
-                        })
+    "Nomor": len(semua_hasil) + 1,
+    "Kata Kunci": keyword,
+    "Judul": judul,
+    "Link": f"[🔗 Buka Berita]({link})",   # 👈 diubah ke format hyperlink markdown
+    "Tanggal": tanggal_str,
+    "Ringkasan": ringkasan
+})
+
             except Exception:
                 continue
 
@@ -148,8 +153,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
-                st.dataframe(df_live, use_container_width=True, height=400)
-                st.caption(f"Total berita ditemukan: {len(df_live)}")
+                st.dataframe(df_live, use_container_width=True, height=400)  # untuk tampilan biasa
+                st.caption("Klik link di kolom 'Link' untuk membuka berita.")
+
 
     status_placeholder.empty()
     keyword_placeholder.empty()
