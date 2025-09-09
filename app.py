@@ -11,9 +11,9 @@ import google.generativeai as genai # --- BARU ---
 # --- BARU: Konfigurasi API Key Gemini ---
 # PENTING: Ganti dengan API key Anda. Sebaiknya gunakan st.secrets untuk keamanan.
 # Contoh: API_KEYS = [st.secrets["gemini_api_key_1"], st.secrets["gemini_api_key_2"]]
+# Kode ini memberi tahu Streamlit untuk mencari nilainya di file secrets.toml
 API_KEYS = [
-    "GANTI_DENGAN_API_KEY_ANDA_1",
-    "GANTI_DENGAN_API_KEY_ANDA_2", # Tambahkan beberapa key jika ada untuk rotasi
+    st.secrets["gemini_api_key_1"]
 ]
 current_key_idx = 0
 
