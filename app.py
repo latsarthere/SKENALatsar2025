@@ -60,13 +60,23 @@ def get_article_text_with_newspaper(link):
         return "Gagal mengambil konten artikel."
 
 def get_real_url(gn_link):
-    """Ambil URL asli dari link Google News."""
+    """
+    Ambil URL asli dari link Google News dengan metode yang lebih andal.
+    """
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.head(gn_link, headers=headers, timeout=10, allow_redirects=True)
-        return response.url
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
+        }
+        # Gunakan session untuk menangani cookies dan redirect dengan lebih baik
+        session = requests.Session()
+        resp = session.get(gn_link, headers=headers, timeout=10, allow_redirects=True)
+        
+        # URL terakhir setelah semua redirect adalah URL yang kita inginkan
+        return resp.url
     except requests.RequestException:
+        # Jika ada error jaringan, kembalikan link awal
         return gn_link
+
 
 def get_source_from_url(url):
     """Mengekstrak nama sumber (domain) dari URL."""
@@ -140,10 +150,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     if 'hasil_scraping' not in st.session_state:
         st.session_state.hasil_scraping = []
     
-    # <-- [PERUBAHAN UNTUK DEBUG]
-    # Kita akan tampilkan semua hasil, tidak peduli relevan atau tidak
-    # untuk melihat apa yang sebenarnya terjadi.
-    
     for kategori, kata_kunci_list in kata_kunci_lapus_dict.items():
         for keyword_raw in kata_kunci_list:
             elapsed_time = time.time() - start_time
@@ -159,7 +165,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 if not search_results['entries']:
-                    continue # Lanjut ke keyword berikutnya jika tidak ada hasil
+                    continue
                     
                 for entry in search_results['entries']:
                     gn_link = entry.link
@@ -169,11 +175,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
                     judul = entry.title
                     
-                    # Ekstrak teks dan sumber
                     article_text = get_article_text_with_newspaper(real_link)
                     sumber = get_source_from_url(real_link)
                     
-                    # Buat ringkasan AI
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
                     try:
@@ -182,8 +186,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     except (ValueError, TypeError):
                         tanggal_str = "N/A"
                     
-                    # <-- [PERUBAHAN UNTUK DEBUG]
-                    # Tambahkan semua hasil ke tabel, termasuk teks mentah dan hasil ringkasan AI
                     st.session_state.hasil_scraping.append({
                         "Nomor": len(st.session_state.hasil_scraping) + 1,
                         "Judul": judul,
@@ -191,19 +193,18 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         "Link": real_link,
                         "Tanggal": tanggal_str,
                         "Ringkasan AI": ringkasan_ai,
-                        "Teks Mentah": article_text # <-- Kolom baru untuk debug
+                        "Teks Mentah": article_text
                     })
 
             except Exception as e:
                 st.warning(f"Error saat mencari '{keyword}': {e}")
                 continue
 
-        # Update tabel secara live setelah setiap kategori selesai
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            # <-- [PERUBAHAN UNTUK DEBUG]
-            # Menampilkan semua kolom yang kita kumpulkan
-            kolom_urut = ["Nomor", "Judul", "Sumber", "Tanggal", "Ringkasan AI", "Teks Mentah", "Link"]
+            
+            # <-- [PERUBAHAN] Mengubah urutan kolom sesuai permintaan
+            kolom_urut = ["Nomor", "Judul", "Sumber", "Tanggal", "Link", "Ringkasan AI", "Teks Mentah"]
             df_live_display = df_live[kolom_urut]
             
             with table_placeholder.container():
@@ -214,8 +215,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     status_placeholder.empty()
     keyword_placeholder.empty()
     
-    # <-- [PERUBAHAN UNTUK DEBUG]
-    # Filter hasil akhir HANYA jika ingin diunduh
     final_results = [res for res in st.session_state.hasil_scraping if "TIDAK RELEVAN" not in res["Ringkasan AI"]]
     
     return pd.DataFrame(final_results) if final_results else pd.DataFrame()
@@ -385,10 +384,7 @@ def show_scraping_page():
             st.success(f"Scraping telah selesai dalam {total_duration_str}.")
 
             if not hasil_df.empty:
-                # <-- [PERUBAHAN UNTUK DEBUG]
-                # Pastikan kolom yang diunduh adalah kolom yang sudah difilter
                 kolom_final = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Sumber", "Link", "Tanggal", "Ringkasan AI"]
-                # Cek kolom mana yang ada di dataframe hasil
                 kolom_tersedia = [col for col in kolom_final if col in hasil_df.columns]
                 output_df = hasil_df[kolom_tersedia]
 
@@ -412,8 +408,7 @@ def show_scraping_page():
                     use_container_width=True
                 )
             else:
-                # Pesan ini akan muncul jika setelah semua proses, tidak ada berita relevan yang tersisa
-                st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
+                st.warning("Tidak ada berita relevan yang ditemukan setelah proses penyaringan.")
 
             if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
                 if 'hasil_scraping' in st.session_state:
