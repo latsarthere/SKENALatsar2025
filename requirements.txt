@@ -3,7 +3,6 @@ pandas
 openpyxl
 pygooglenews
 google-generativeai
-requests-html
 requests
 beautifulsoup4
 urllib3
