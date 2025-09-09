@@ -8,16 +8,14 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse, parse_qs
 
-def get_real_url(gn_link):
-    """Ekstrak link asli dari Google News RSS link."""
+def get_real_url(google_url: str) -> str:
+    """Ambil link asli dari link news.google.com"""
     try:
-        parsed = urlparse(gn_link)
-        qs = parse_qs(parsed.query)
-        if "url" in qs:
-            return qs["url"][0]   # ambil link asli (detik.com, tribunnews.com, dll)
-    except:
-        pass
-    return gn_link  # fallback kalau gagal
+        r = requests.get(google_url, timeout=10, allow_redirects=True)
+        return r.url
+    except Exception:
+        return google_url
+
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
