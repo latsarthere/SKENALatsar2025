@@ -7,3 +7,4 @@ selenium
 newspaper4k
 beautifulsoup4
 requests
+selenium
