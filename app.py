@@ -76,17 +76,12 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     return triwulan_map.get(triwulan, (None, None))
 
 def ekstrak_info_artikel(link_google):
-    """
-    Mengunjungi link Google, mengambil URL final, ringkasan, dan sumber artikel.
-    Mengembalikan tuple: (url_final, ringkasan, sumber_dari_url)
-    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(link_google, timeout=10, headers=headers, allow_redirects=True)
         response.raise_for_status()
         
         url_final = response.url
-        
         parsed_uri = urlparse(url_final)
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
         
@@ -140,26 +135,19 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil):
                         continue
 
-                    # --- [PERUBAHAN UTAMA DI SINI] ---
-                    # Logika baru untuk menentukan sumber dan membersihkan judul
                     judul_asli = entry.title
                     sumber_final = ""
                     judul_bersih = judul_asli
 
-                    # Coba pisahkan judul berdasarkan tanda '-' terakhir
                     if ' - ' in judul_asli:
                         parts = judul_asli.rsplit(' - ', 1)
-                        # Jika pemisahan berhasil (ada 2 bagian) dan bagian kedua tidak kosong
                         if len(parts) == 2 and parts[1].strip():
                             judul_bersih = parts[0].strip()
                             sumber_final = parts[1].strip()
                         else:
-                            # Jika gagal, gunakan sumber dari URL sebagai cadangan
                             sumber_final = sumber_dari_url
                     else:
-                        # Jika tidak ada tanda '-', gunakan sumber dari URL sebagai cadangan
                         sumber_final = sumber_dari_url
-                    # --- AKHIR PERUBAHAN ---
 
                     judul_lower, ringkasan_lower, keyword_lower = judul_bersih.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
@@ -175,10 +163,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1,
                             "Kata Kunci": keyword,
-                            "Judul": judul_bersih, # Gunakan judul yang sudah bersih
+                            "Judul": judul_bersih,
                             "Link": link_final,
                             "Tanggal": tanggal_str,
-                            "Sumber": sumber_final, # Gunakan sumber yang sudah ditentukan
+                            "Sumber": sumber_final,
                             "Ringkasan": ringkasan
                         })
             except Exception:
@@ -218,7 +206,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     else:
         return pd.DataFrame()
 
-# --- HALAMAN-HALAMAN APLIKASI --- (Tidak ada perubahan di bawah sini)
+# --- HALAMAN-HALAMAN APLIKASI ---
 
 def show_home_page():
     with st.container():
@@ -230,7 +218,7 @@ def show_home_page():
     st.markdown("""
     Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.
     
-    _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Pendahuluan** terlebih dahulu._
+    _Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Panduan** terlebih dahulu._
     """)
     
     if not st.session_state.get('logged_in', False):
@@ -256,8 +244,8 @@ def show_home_page():
         if st.button("Pilih Produksi", key="home_produksi", use_container_width=True, disabled=is_disabled):
             st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
 
-def show_pendahuluan_page():
-    st.title("📖 Pendahuluan")
+def show_panduan_page():
+    st.title("📖 Panduan Pengguna")
     st.markdown("---")
     st.markdown("""
     Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.
@@ -281,6 +269,26 @@ def show_documentation_page():
     with st.expander("Tampilkan Pratinjau Folder di Sini"):
         embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
         st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
+
+# --- [PERUBAHAN 1] --- Menambahkan fungsi halaman saran
+def show_saran_page():
+    st.title("✍️ Kotak Saran")
+    st.markdown("---")
+    st.info("Punya ide untuk pengembangan atau menemukan bug? Beri tahu kami di sini!")
+
+    with st.form("saran_form", clear_on_submit=True):
+        nama = st.text_input("Nama Anda", placeholder="Masukkan nama Anda (opsional)")
+        saran = st.text_area("Saran atau Masukan", placeholder="Tuliskan saran, ide, atau laporan bug Anda di sini...", height=200)
+        
+        submitted = st.form_submit_button("🚀 Kirim Saran", use_container_width=True, type="primary")
+
+        if submitted:
+            if saran: # Memastikan saran tidak kosong
+                # Di aplikasi nyata, Anda akan menyimpan ini ke database atau Google Sheets
+                st.success(f"Terima kasih, {nama if nama else 'Sobat SKENA'}! Saran Anda telah kami terima.")
+                st.balloons()
+            else:
+                st.warning("Mohon isi kolom saran terlebih dahulu.")
 
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
@@ -386,7 +394,6 @@ def show_scraping_page():
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
 
-# Inisialisasi Session State
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 if "logged_in" not in st.session_state:
@@ -422,9 +429,10 @@ with st.sidebar:
     
     if st.button("🏠 Home", use_container_width=True):
         st.session_state.page = "Home"; st.rerun()
-        
-    if st.button("📖 Pendahuluan", use_container_width=True):
-        st.session_state.page = "Pendahuluan"; st.rerun()
+    
+    # --- [PERUBAHAN 2] --- Mengganti nama tombol
+    if st.button("📖 Panduan", use_container_width=True):
+        st.session_state.page = "Panduan"; st.rerun()
 
     if st.session_state.logged_in:
         if st.button("⚙️ Scraping", use_container_width=True):
@@ -432,16 +440,25 @@ with st.sidebar:
         
         if st.button("🗂️ Dokumentasi", use_container_width=True):
             st.session_state.page = "Dokumentasi"; st.rerun()
+        
+        # --- [PERUBAHAN 3] --- Menambahkan tombol sidebar saran
+        if st.button("✍️ Saran", use_container_width=True):
+            st.session_state.page = "Saran"; st.rerun()
+
 
 # --- Logika Tampilan Halaman ---
 if st.session_state.page == "Home":
     show_home_page()
-elif st.session_state.page == "Pendahuluan":
-    show_pendahuluan_page()
+elif st.session_state.page == "Panduan":
+    show_panduan_page()
 elif st.session_state.page == "Scraping" and st.session_state.logged_in:
     show_scraping_page()
 elif st.session_state.page == "Dokumentasi" and st.session_state.logged_in:
     show_documentation_page()
+# --- [PERUBAHAN 4] --- Menambahkan logika untuk menampilkan halaman saran
+elif st.session_state.page == "Saran" and st.session_state.logged_in:
+    show_saran_page()
 else:
+    # Jika terjadi kondisi aneh, kembalikan ke Home
     st.session_state.page = "Home"
     st.rerun()
