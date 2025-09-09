@@ -1,4 +1,4 @@
-# Versi Final dengan Trafilatura dan Perbaikan Width
+# Versi Final dengan Link Asli
 import streamlit as st
 import pandas as pd
 import time
@@ -8,10 +8,9 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 import google.generativeai as genai
-import trafilatura
+from newspaper import Article
 
 # --- Konfigurasi API Key Gemini ---
-# Kode ini membaca dari Secrets Manager di dashboard Streamlit Cloud Anda
 try:
     API_KEYS = [
         st.secrets["gemini_api_key_1"]
@@ -25,7 +24,6 @@ except (KeyError, FileNotFoundError):
 
 # --- FUNGSI-FUNGSI UTAMA ---
 def get_rotating_model():
-    """Mengambil model Gemini."""
     if not API_KEYS:
         return None
     key = API_KEYS[0]
@@ -37,7 +35,6 @@ def get_rotating_model():
         return None
 
 def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
-    """Membuat ringkasan relevan menggunakan Gemini AI."""
     model = get_rotating_model()
     if not model or not text.strip() or "Gagal mengambil konten" in text or "Konten artikel kosong" in text:
         return "TIDAK RELEVAN"
@@ -53,19 +50,22 @@ def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
     except Exception as e:
         return f"[Gagal meringkas: {e}]"
 
-def get_article_text_with_trafilatura(link):
+def get_article_text_with_newspaper(link):
     """
-    Mengambil teks konten utama dari link berita menggunakan Trafilatura.
+    Mengambil teks konten utama DAN URL FINAL dari sebuah link berita.
     """
     try:
-        downloaded = trafilatura.fetch_url(link)
-        main_text = trafilatura.extract(downloaded, include_tables=False, include_comments=False)
-        if main_text:
-            return main_text[:4000]
-        else:
-            return "Konten artikel kosong atau tidak dapat di-parse."
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        article = Article(link, config={'headers': headers}, request_timeout=15)
+        article.download()
+        article.parse()
+        
+        final_text = article.text[:4000] if article.text else "Konten artikel kosong atau tidak dapat di-parse."
+        final_url = article.url
+
+        return final_text, final_url
     except Exception:
-        return "Gagal mengambil konten artikel."
+        return "Gagal mengambil konten artikel.", link
 
 # --- Konfigurasi Halaman & Tampilan (CSS) ---
 st.set_page_config(
@@ -149,34 +149,35 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     link = entry.link
-                    if any(d['Link'] == link for d in st.session_state.hasil_scraping): continue
+                    if any(d['Link Asli'] == link for d in st.session_state.hasil_scraping): continue
 
                     judul = entry.title
                     
-                    article_text = get_article_text_with_trafilatura(link)
+                    article_text, link_asli = get_article_text_with_newspaper(link)
                     
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
-                    if ringkasan_ai != "TIDAK RELEVAN":
-                        try:
-                            tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
-                            tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
-                        except (ValueError, TypeError):
-                            tanggal_str = "N/A"
-                        
-                        st.session_state.hasil_scraping.append({
-                            "Nomor": len(st.session_state.hasil_scraping) + 1,
-                            "Kategori": kategori,
-                            "Kata Kunci": keyword, "Judul": judul,
-                            "Link": link, "Tanggal": tanggal_str, "Ringkasan AI": ringkasan_ai
-                        })
+                    # if ringkasan_ai != "TIDAK RELEVAN":
+                    try:
+                        tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
+                        tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
+                    except (ValueError, TypeError):
+                        tanggal_str = "N/A"
+                    
+                    st.session_state.hasil_scraping.append({
+                        "Nomor": len(st.session_state.hasil_scraping) + 1,
+                        "Kategori": kategori,
+                        "Kata Kunci": keyword, "Judul": judul,
+                        "Link Asli": link_asli,
+                        "Tanggal": tanggal_str, "Ringkasan AI": ringkasan_ai
+                    })
             except Exception as e:
                 st.warning(f"Error saat mencari '{keyword}': {e}")
                 continue
 
         if st.session_state.hasil_scraping:
             df_live = pd.DataFrame(st.session_state.hasil_scraping)
-            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Ringkasan AI"]
+            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link Asli", "Tanggal", "Ringkasan AI"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
@@ -385,7 +386,7 @@ def show_scraping_page():
         else:
             st.error("Rentang tanggal tidak valid. Silakan periksa kembali pilihan Anda.")
 
-# --- NAVIGASI DAN LOGIKA UTAMA ---
+# --- NAVIGasi DAN LOGIKA UTAMA ---
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 if "logged_in" not in st.session_state:
