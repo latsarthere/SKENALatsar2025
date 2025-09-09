@@ -1,15 +1,17 @@
-# Versi Final dengan metode scraping HTML
+# Versi Final dengan Selenium untuk mengatasi JavaScript Redirect
 import streamlit as st
 import pandas as pd
 import time
 import io
-import requests
-from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
 from pygooglenews import GoogleNews
 import google.generativeai as genai
 from newspaper import Article
+# Import baru untuk Selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 
 # --- Konfigurasi API Key Gemini ---
 try:
@@ -19,59 +21,58 @@ except (KeyError, FileNotFoundError):
     st.error("Secret 'gemini_api_key_1' tidak ditemukan. Harap tambahkan di 'Manage app' > 'Secrets'.")
     API_KEY = None
 
+# --- Konfigurasi Selenium (PENTING) ---
+@st.cache_resource
+def get_driver():
+    """Menginisialisasi driver browser Chrome untuk Selenium."""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    service = Service(executable_path="/usr/bin/chromedriver")
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
+
 # --- FUNGSI-FUNGSI UTAMA ---
 @st.cache_resource
 def get_gemini_model():
     if not API_KEY: return None
-    try:
-        return genai.GenerativeModel("gemini-1.5-flash")
-    except Exception as e:
-        st.warning(f"Gagal mengkonfigurasi API Key: {e}")
-        return None
+    return genai.GenerativeModel("gemini-1.5-flash")
 
 def ringkas_dengan_gemini(text: str, wilayah: str, usaha: str) -> str:
     model = get_gemini_model()
     if not model or not text or "Gagal" in text or "Konten artikel kosong" in text:
         return "TIDAK RELEVAN"
-    prompt = (
-        f"Buat paragraf ringkas 2 kalimat (maks 40 kata) fokus pada topik '{usaha}' di '{wilayah}'. "
-        f"Jika teks tidak relevan, tulis HANYA 'TIDAK RELEVAN'.\n\nTeks: {text}"
-    )
+    prompt = f"Buat ringkasan 2 kalimat (maks 40 kata) fokus pada '{usaha}' di '{wilayah}'. Jika tidak relevan, tulis 'TIDAK RELEVAN'.\n\nTeks: {text}"
     try:
         return model.generate_content(prompt).text.strip()
     except Exception:
         return "[Gagal meringkas]"
 
-def get_final_url_from_google(google_url):
-    """
-    Metode ringan untuk mengambil URL asli dari halaman redirect Google News.
-    """
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+def fetch_article_data(google_news_url):
+    """Menggunakan Selenium untuk mendapatkan URL asli, lalu newspaper untuk konten."""
+    driver = get_driver()
     try:
-        response = requests.get(google_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Link asli biasanya ada di dalam tag 'a' pertama
-        link_tag = soup.find("a")
-        if link_tag and link_tag.get("href"):
-            return link_tag.get("href")
-    except Exception:
-        pass
-    return google_url # Kembalikan link asli jika gagal
+        # Langkah 1: Gunakan Selenium untuk membuka link Google & mendapatkan URL asli
+        driver.get(google_news_url)
+        time.sleep(3) # Beri waktu 3 detik untuk JavaScript redirect berjalan
+        final_url = driver.current_url
 
-def get_article_text(final_url):
-    """
-    Mengambil teks artikel dari URL yang sudah final menggunakan newspaper4k.
-    """
-    try:
+        # Jika setelah 3 detik masih di halaman google, anggap gagal redirect
+        if "google.com" in final_url:
+            return "Gagal redirect dari Google.", google_news_url
+
+        # Langkah 2: Gunakan Newspaper untuk mem-parsing dari URL asli yang sudah didapat
         article = Article(final_url)
-        article.download()
+        article.download(input_html=driver.page_source) # Kirim HTML dari selenium agar lebih cepat
         article.parse()
-        return article.text[:4000] if article.text else "Konten artikel kosong."
-    except Exception:
-        return "Gagal mengambil konten artikel."
+        text = article.text[:4000] if article.text else "Konten artikel kosong."
+        return text, final_url
+    except Exception as e:
+        return f"Gagal memproses: {e}", google_news_url
 
-# (Sisa kode 95% sama, hanya perubahan kecil di fungsi start_scraping)
-
+# (Sisa kode dari sini ke bawah tidak ada perubahan, Anda bisa copy paste seluruhnya)
 # --- Konfigurasi Halaman & Tampilan (CSS) ---
 st.set_page_config(page_title="SKENA", page_icon="logo skena.png", layout="wide")
 st.markdown("""<style>.block-container{padding-top:2rem} h1,h2,h3,h4,h5{color:#0073C4} [data-testid=stSidebar]{background-color:#f8f9fa}</style>""", unsafe_allow_html=True)
@@ -119,30 +120,26 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     link_google = entry.link
                     judul = entry.title
                     
-                    # Langkah 1: Dapatkan link asli dari link Google
-                    link_asli = get_final_url_from_google(link_google)
-                    
+                    article_text, link_asli = fetch_article_data(link_google)
+
                     if any(d['Link Asli'] == link_asli for d in st.session_state.hasil_scraping): continue
                     
-                    # Langkah 2: Ambil teks dari link asli
-                    article_text = get_article_text(link_asli)
-                    
-                    sumber = urlparse(link_asli).netloc.replace('www.', '') if link_asli else "Tidak Dikenal"
+                    sumber = urlparse(link_asli).netloc.replace('www.', '') if "google.com" not in link_asli else "Google News"
                     
                     ringkasan_ai = ringkas_dengan_gemini(article_text, nama_daerah, keyword)
 
-                    # if ringkasan_ai != "TIDAK RELEVAN":
-                    try:
-                        tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
-                        tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
-                    except (ValueError, TypeError):
-                        tanggal_str = "N/A"
-                    
-                    st.session_state.hasil_scraping.append({
-                        "Nomor": len(st.session_state.hasil_scraping) + 1, "Kategori": kategori, 
-                        "Kata Kunci": keyword, "Judul": judul, "Sumber": sumber, 
-                        "Link Asli": link_asli, "Tanggal": tanggal_str, "Ringkasan AI": ringkasan_ai
-                    })
+                    if ringkasan_ai != "TIDAK RELEVAN": # <-- Saringan AI bisa diaktifkan kembali
+                        try:
+                            tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
+                            tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
+                        except (ValueError, TypeError):
+                            tanggal_str = "N/A"
+                        
+                        st.session_state.hasil_scraping.append({
+                            "Nomor": len(st.session_state.hasil_scraping) + 1, "Kategori": kategori, 
+                            "Kata Kunci": keyword, "Judul": judul, "Sumber": sumber, 
+                            "Link Asli": link_asli, "Tanggal": tanggal_str, "Ringkasan AI": ringkasan_ai
+                        })
             except Exception as e:
                 st.warning(f"Error saat mencari '{keyword}': {e}")
                 continue
@@ -161,6 +158,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     
     return pd.DataFrame(st.session_state.hasil_scraping) if st.session_state.hasil_scraping else pd.DataFrame()
 
+# (Sisa kode halaman sama persis seperti sebelumnya)
 # --- HALAMAN-HALAMAN APLIKASI ---
 def set_page(page_name): st.session_state.page = page_name
 
