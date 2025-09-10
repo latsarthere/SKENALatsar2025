@@ -321,7 +321,6 @@ def show_scraping_page():
     else: # Neraca
         st.header(f"📊 Scraping Berita - {st.session_state.sub_page}")
 
-    # --- [MODIFIKASI] Logika Pemuatan Data ---
     if not is_manual:
         with st.spinner("Memuat data kategori & sub-kategori..."):
             base_url = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
@@ -372,26 +371,40 @@ def show_scraping_page():
             st.rerun()
 
     else: # Neraca
-        # --- [MODIFIKASI] Opsi Radio Button ---
         mode_pencarian = st.radio("Pilih Mode Pencarian:", ["Kategori", "Sub Kategori"], horizontal=True)
         
+        # --- [MODIFIKASI] Menambahkan multiselect untuk mode "Kategori" ---
+        kategori_terpilih = []
         sub_kategori_terpilih = []
-        if mode_pencarian == 'Sub Kategori':
+
+        if mode_pencarian == 'Kategori':
+            kategori_terpilih = st.multiselect(
+                'Pilih Kategori:', 
+                df_kat.columns.tolist(),
+                key='kategori_multiselect'
+            )
+        elif mode_pencarian == 'Sub Kategori':
             sub_kategori_terpilih = st.multiselect(
                 'Pilih Sub Kategori:', 
-                df_subkat.columns.tolist(), # Menggunakan df_subkat
+                df_subkat.columns.tolist(),
                 max_selections=3,
-                help="Anda dapat memilih maksimal 3 sub-kategori."
+                help="Anda dapat memilih maksimal 3 sub-kategori.",
+                key='sub_kategori_multiselect'
             )
 
-        is_disabled = (triwulan_input == "--Pilih Triwulan--" or (mode_pencarian == 'Sub Kategori' and not sub_kategori_terpilih))
+        # Logika untuk menonaktifkan tombol jika tidak ada yang dipilih
+        is_disabled = (
+            triwulan_input == "--Pilih Triwulan--" or
+            (mode_pencarian == 'Kategori' and not kategori_terpilih) or
+            (mode_pencarian == 'Sub Kategori' and not sub_kategori_terpilih)
+        )
+
         if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary", disabled=is_disabled):
             tahun_input = validate_year(tahun_input_str)
             if tahun_input is None: return
 
-            # --- [MODIFIKASI] Menentukan dataframe yang akan diproses ---
             if mode_pencarian == "Kategori":
-                df_proses = df_kat
+                df_proses = df_kat[kategori_terpilih]
             else: # Mode "Sub Kategori"
                 df_proses = df_subkat[sub_kategori_terpilih]
 
