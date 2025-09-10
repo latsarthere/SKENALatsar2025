@@ -217,8 +217,8 @@ def show_home_page():
     st.header("Pilih Kategori Data")
     is_disabled = not st.session_state.get('logged_in', False)
 
-    # Baris 1
-    col1, col2 = st.columns(2, gap="large")
+    col1, col2, col3, col4 = st.columns(4, gap="large")
+
     with col1:
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
@@ -233,8 +233,6 @@ def show_home_page():
             st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"
             st.rerun()
 
-    # Baris 2
-    col3, col4 = st.columns(2, gap="large")
     with col3:
         st.subheader("👥 Sosial")
         st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
