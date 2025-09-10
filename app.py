@@ -154,7 +154,6 @@ def ekstrak_info_artikel(driver, link_google, keyword):
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, status_placeholder, keyword_placeholder, table_placeholder, mode_ringkasan):
     use_summary = (mode_ringkasan == "Dengan Ringkasan (cukup lama)")
     
-    # [MODIFIKASI] Hanya aktifkan Selenium jika diperlukan
     driver = get_selenium_driver() if use_summary else None
     
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
@@ -194,12 +193,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     
-                    # --- [MODIFIKASI] Logika baru untuk mode cepat ---
                     if use_summary:
-                        # Jalur lambat: Buka halaman dengan Selenium untuk dapat ringkasan
                         link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword)
                     else:
-                        # Jalur cepat: Ambil data langsung dari feed RSS
                         link_final = entry.link
                         ringkasan = ""
                         sumber_dari_url = entry.source.title if entry.source else ""
@@ -211,7 +207,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     if ' - ' in judul_asli:
                         parts = judul_asli.rsplit(' - ', 1)
                         if len(parts) == 2 and parts[1].strip():
-                            # Ambil sumber dari judul jika ada, karena sering lebih akurat
                             judul_bersih, sumber_final = parts[0].strip(), parts[1].strip()
 
                     judul_lower = judul_bersih.lower()
@@ -391,7 +386,7 @@ def show_scraping_page():
             if not kata_kunci_manual.strip():
                 st.warning("Harap isi kata kunci terlebih dahulu."); return
             
-            df_proses = pd.DataFrame({"Lainnya": [kata_kunci_manual]})
+            df_proses = pd.DataFrame({kata_kunci_manual: [kata_kunci_manual]})
             st.session_state.start_scraping = True
             st.session_state.scraping_params = {
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
@@ -522,12 +517,26 @@ def show_scraping_page():
 
             file_bytes = output.getvalue()
             
-            now = datetime.now()
-            sub_page_name = st.session_state.get('sub_page', 'Data')
-            if result['params']['triwulan'] != "Tanggal Custom":
-                filename = f"Hasil_Scraping_{sub_page_name}_{result['params']['triwulan']}_{result['params']['tahun']}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+            # --- [MODIFIKASI] Logika Penamaan File Baru ---
+            params = result['params']
+            now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            topic_str = st.session_state.get('sub_page', 'Data')
+
+            # Tentukan string periode
+            if params['triwulan'] == "Tanggal Custom":
+                start_str = params['start_date'].strftime('%Y%m%d')
+                end_str = params['end_date'].strftime('%Y%m%d')
+                period_str = f"{start_str} s.d {end_str}"
             else:
-                filename = f"Hasil_Scraping_{sub_page_name}_Custom_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+                period_str = f"{params['triwulan']}_{params['tahun']}"
+
+            # Tentukan string kategori/kata kunci
+            kategori_list = params['df'].columns.tolist()
+            kategori_str = ",".join(kategori_list)
+            # Sanitasi untuk karakter yang tidak valid di nama file
+            kategori_str = re.sub(r'[\\/*?:"<>|]', "", kategori_str)
+
+            filename = f"Hasil_Scraping_{topic_str}_{period_str}_{kategori_str}_{now_str}.xlsx"
             
             st.download_button("📥 Unduh Hasil (Excel)", file_bytes, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
             
