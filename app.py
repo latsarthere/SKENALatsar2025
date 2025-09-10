@@ -180,7 +180,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             
             elapsed_time = time.time() - start_time
             menit, detik = divmod(int(elapsed_time), 60)
-            status_placeholder.info(f"⏳ Proses Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
+            status_placeholder.info(f"⏳ Durasi Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
             
             if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
@@ -392,7 +392,7 @@ def show_scraping_page():
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
                 'start_date': start_date_input, 'end_date': end_date_input,
                 'mode_ringkasan': mode_ringkasan,
-                'start_time_obj': datetime.now() # [MODIFIKASI WAKTU]
+                'start_time_obj': datetime.now()
             }
             st.rerun()
 
@@ -444,7 +444,7 @@ def show_scraping_page():
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
                 'start_date': start_date_input, 'end_date': end_date_input,
                 'mode_ringkasan': mode_ringkasan,
-                'start_time_obj': datetime.now() # [MODIFIKASI WAKTU]
+                'start_time_obj': datetime.now()
             }
             st.rerun()
 
@@ -468,11 +468,6 @@ def show_scraping_page():
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # [MODIFIKASI WAKTU] Tampilkan waktu mulai
-                start_time_to_display = params['start_time_obj'].strftime('%H:%M:%S (%d-%m-%Y)')
-                st.info(f"▶️ **Waktu Mulai:** {start_time_to_display}")
-
-
                 status_placeholder = st.empty()
                 keyword_placeholder = st.empty()
                 table_placeholder = st.empty()
@@ -483,7 +478,6 @@ def show_scraping_page():
                     mode_ringkasan=params['mode_ringkasan']
                 )
                 
-                # [MODIFIKASI WAKTU] Tangkap waktu selesai dan simpan
                 end_time_obj = datetime.now()
                 
                 status_placeholder.empty()
@@ -505,26 +499,18 @@ def show_scraping_page():
         result = st.session_state.scraping_result
         hasil_df = result['df']
         
-        # [MODIFIKASI WAKTU] Tampilkan ringkasan waktu di hasil akhir
         st.markdown("---"); st.header("✅ Proses Selesai")
+        
+        # --- [MODIFIKASI WAKTU] Hanya Tampilkan Durasi ---
         start_time = result['start_time']
         end_time = result['end_time']
         duration = end_time - start_time
-        
-        start_time_str = start_time.strftime('%H:%M:%S (%d-%m-%Y)')
-        end_time_str = end_time.strftime('%H:%M:%S (%d-%m-%Y)')
         
         total_seconds = int(duration.total_seconds())
         minutes, seconds = divmod(total_seconds, 60)
         duration_str = f"{minutes} menit {seconds} detik"
         
         st.success(f"Proses scraping berhasil diselesaikan dalam **{duration_str}**.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info(f"▶️ **Waktu Mulai:** {start_time_str}")
-        with col2:
-            st.info(f"⏹️ **Waktu Selesai:** {end_time_str}")
         st.markdown("---")
         
         if not hasil_df.empty:
@@ -559,7 +545,7 @@ def show_scraping_page():
 
             if params['triwulan'] == "Tanggal Custom":
                 start_str = params['start_date'].strftime('%Y%m%d')
-                end_str = params['end_date'].strftime('%Y%m%d')
+                end_str = params['end_date'].strftime('%Ym%d')
                 period_str = f"{start_str} s.d {end_str}"
             else:
                 period_str = f"{params['triwulan']}_{params['tahun']}"
