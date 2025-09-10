@@ -7,8 +7,6 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
-import re
-
 
 # --- [PERUBAHAN 1 DARI SAYA] Impor library Selenium ---
 from selenium import webdriver
@@ -99,75 +97,47 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 
 # --- [PERUBAHAN 3 DARI SAYA] Fungsi ekstrak info diubah menggunakan Selenium ---
 # Fungsi ini sekarang menerima 'driver' sebagai argumen.
+import re
 
-def buat_ringkasan_cepat(soup, keyword_list, lokasi_list, max_kalimat=4):
-    """
-    Ringkasan cepat 2–4 kalimat.
-    Ambil dari paragraf awal agar tidak loading lama.
-    """
-    # Ambil maksimal 5 paragraf pertama saja biar cepat
-    teks_artikel = " ".join(p.get_text(strip=True) for p in soup.find_all('p')[:5])
-    if not teks_artikel:
-        return ""
-    
-    kalimat_list = re.split(r'(?<=[.!?]) +', teks_artikel)
-    relevan = []
-    
-    faktor_kunci = [
-        "kendala", "alasan", "penyebab", "peningkatan", "penurunan",
-        "kesulitan", "hambatan", "dana tambahan", "bantuan", "dukungan"
-    ]
-    
-    for kal in kalimat_list:
-        kal_lower = kal.lower()
-        
-        if any(k.lower() in kal_lower for k in keyword_list) or any(loc.lower() in kal_lower for loc in lokasi_list):
-            relevan.append(kal.strip())
-        
-        elif any(f in kal_lower for f in faktor_kunci):
-            relevan.append(kal.strip())
-        
-        if len(relevan) >= max_kalimat:
-            break
-    
-    if not relevan and kalimat_list:
-        relevan.append(kalimat_list[0].strip())
-    
-    return " ".join(relevan)
-
-def ekstrak_info_artikel(driver, link_google, keyword, lokasi_filter):
+def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
-        # Beri waktu beberapa detik agar JavaScript redirect selesai dieksekusi
-        time.sleep(2.5) 
-        
+        time.sleep(2)  # cukup 2 detik untuk redirect
         url_final = driver.current_url
-        
-        # Jika setelah menunggu URL-nya masih dari Google, berarti redirect gagal. Lewati.
+
         if "google.com/url" in url_final or "consent.google.com" in url_final:
-             return None, "", ""
+            return None, "", ""
 
         parsed_uri = urlparse(url_final)
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
-        
+
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        # Ringkasan cepat (2–4 kalimat)
-        ringkasan = buat_ringkasan_cepat(soup, [keyword], lokasi_filter, max_kalimat=4)
 
-        return url_final, ringkasan, sumber_dari_url
-        
+        # Ambil beberapa paragraf pertama
+        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p')[:5]]
+        text_content = " ".join(paragraphs)
+
+        # Ambil meta description (fallback utama)
+        ringkasan = ""
+        deskripsi = soup.find('meta', attrs={'name': 'description'})
+        if deskripsi and deskripsi.get('content'):
+            ringkasan = deskripsi['content']
+        elif soup.find('meta', attrs={'property': 'og:description'}):
+            ringkasan = soup.find('meta', attrs={'property': 'og:description'}).get('content', '')
+
+        # Cari kalimat penting (penyebab, kenaikan, penurunan, alasan, dampak)
+        keywords = r"(penyebab|karena|akibat|alasan|kenaikan|penurunan|naik|turun|dampak)"
+        sentences = re.split(r'(?<=[.!?]) +', text_content)
+
+        kalimat_penting = [s for s in sentences if re.search(keywords, s, re.IGNORECASE)]
+        if kalimat_penting:
+            ringkasan = " ".join(kalimat_penting[:2]) + " " + ringkasan
+
+        return url_final, ringkasan.strip(), sumber_dari_url
+
     except Exception:
-        # Jika ada error saat memproses satu link, kembalikan nilai kosong dan lanjut ke link berikutnya.
         return None, "", ""
 
-
-
-            
-        return url_final, ringkasan, sumber_dari_url
-        
-    except Exception:
-        # Jika ada error saat memproses satu link, kembalikan nilai kosong dan lanjut ke link berikutnya.
-        return None, "", ""
 
 # --- [PERUBAHAN 4 DARI SAYA] Fungsi start_scraping diubah untuk menggunakan driver Selenium ---
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
@@ -203,7 +173,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 for entry in search_results['entries']:
                     
                     # Panggil fungsi ekstrak_info_artikel dengan driver
-                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword, lokasi_filter)
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link)
 
                     # Jika link_final kosong (gagal redirect) atau link sudah ada, lewati.
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil):
