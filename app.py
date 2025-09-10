@@ -133,7 +133,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
-        time.sleep(2)
+        time.sleep(1)
         url_final = driver.current_url
         if "google.com/url" in url_final or "consent.google.com" in url_final:
             return None, "", ""
@@ -141,6 +141,7 @@ def ekstrak_info_artikel(driver, link_google):
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
+        # ambil meta description / og:description
         ringkasan_meta = ""
         meta_desc = soup.find('meta', attrs={'name': 'description'})
         og_desc = soup.find('meta', attrs={'property': 'og:description'})
@@ -148,23 +149,29 @@ def ekstrak_info_artikel(driver, link_google):
             ringkasan_meta = og_desc['content']
         elif meta_desc and meta_desc.get('content'):
             ringkasan_meta = meta_desc['content']
-
+        
+        # ambil 2 paragraf awal saja
+        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p', limit=2)]
+        text_content = " ".join(paragraphs)
+        
+        # cari kalimat penting
         kalimat_fenomena = ""
-        paragraphs = soup.find_all('p', limit=5)
-        text_content = " ".join([p.get_text(strip=True) for p in paragraphs])
         keywords_regex = r"(karena|penyebab|akibat|dampak|memicu|meningkat|menurun|naik|turun)"
         sentences = re.split(r'(?<=[.!?])\s+', text_content)
-        kalimat_penting = [s for s in sentences if re.search(keywords_regex, s, re.IGNORECASE)]
-        if kalimat_penting:
-            kalimat_fenomena = " ".join(kalimat_penting[:2])
-
-        ringkasan_final = f"{kalimat_fenomena} {ringkasan_meta}".strip()
+        for s in sentences:
+            if re.search(keywords_regex, s, re.IGNORECASE):
+                kalimat_fenomena = s.strip()
+                break
+        
+        # gabung fenomena + meta
+        ringkasan_final = kalimat_fenomena if kalimat_fenomena else ringkasan_meta
         if not ringkasan_final and paragraphs:
-            ringkasan_final = paragraphs[0].get_text(strip=True)
-            
-        return url_final, ringkasan_final, sumber_dari_url
+            ringkasan_final = paragraphs[0]
+        
+        return url_final, ringkasan_final.strip(), sumber_dari_url
     except Exception:
         return None, "", ""
+
 
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     driver = get_selenium_driver()
