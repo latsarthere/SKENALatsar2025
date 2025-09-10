@@ -25,7 +25,6 @@ st.set_page_config(
 )
 
 # --- TEMA WARNA & GAYA ---
-# (CSS tetap sama seperti sebelumnya)
 custom_css = """
 <style>
     .block-container { padding-top: 2rem; }
@@ -106,7 +105,6 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-# --- [MODIFIKASI] FUNGSI EKSTRAK INFO DENGAN RINGKASAN CEPAT & RELEVAN ---
 def ekstrak_info_artikel(driver, link_google, keyword):
     try:
         driver.get(link_google)
@@ -127,13 +125,11 @@ def ekstrak_info_artikel(driver, link_google, keyword):
         kalimat_list = re.split(r'(?<=[.!?])\s+', teks_artikel)
         ringkasan = ""
 
-        # Cari kalimat pertama yang mengandung keyword
         for kalimat in kalimat_list:
             if keyword.lower() in kalimat.lower():
                 ringkasan = kalimat.strip()
-                break # Hentikan pencarian setelah menemukan yang pertama
+                break 
 
-        # Jika tidak ada kalimat dengan keyword, ambil kalimat pertama
         if not ringkasan and kalimat_list:
             ringkasan = kalimat_list[0].strip()
 
@@ -170,7 +166,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    # Teruskan keyword ke fungsi ekstrak_info_artikel
                     link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword)
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
@@ -184,8 +179,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
                     judul_lower, ringkasan_lower = judul_bersih.lower(), ringkasan.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
-                    
-                    # Cek keyword di judul atau ringkasan
                     keyword_ditemukan = keyword.lower() in judul_lower or keyword.lower() in ringkasan_lower
 
                     if lokasi_ditemukan or keyword_ditemukan:
@@ -251,14 +244,12 @@ def show_home_page():
         st.write("Informasi seputar lainnya dapat dicari bagian ini.")
         if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Lainnya"; st.rerun()
 
-
 def show_panduan_page():
     st.title("📖 Panduan Pengguna")
     st.markdown("---")
     st.markdown("Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.\n\nAplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet.")
     if not st.session_state.get('logged_in', False):
         st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
-
 
 def show_documentation_page():
     st.title("🗂️ Dokumentasi")
@@ -269,7 +260,6 @@ def show_documentation_page():
     st.subheader("Pratinjau Isi Folder")
     embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
     st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
-
 
 def show_saran_page():
     st.title("✍️ Kotak Saran")
@@ -289,7 +279,6 @@ def show_saran_page():
             else:
                 if not nama_valid: st.warning("Nama wajib diisi dan harus lebih dari 5 karakter.")
                 if not saran_valid: st.warning("Kolom saran tidak boleh kosong.")
-
 
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
@@ -338,7 +327,17 @@ def show_scraping_page():
 
     else: # Neraca
         mode_kategori = st.radio("Pilih Opsi Kategori:", ["Semua Kategori", "Pilih Kategori Tertentu"], horizontal=True)
-        kategori_terpilih = st.multiselect('Pilih sub-kategori:', df_lapus.columns.tolist()) if mode_kategori == 'Pilih Kategori Tertentu' else []
+        
+        # --- [MODIFIKASI 1] BATASAN MAKSIMAL 3 SUB-KATEGORI ---
+        kategori_terpilih = []
+        if mode_kategori == 'Pilih Kategori Tertentu':
+            kategori_terpilih = st.multiselect(
+                'Pilih sub-kategori:', 
+                df_lapus.columns.tolist(),
+                max_selections=3,
+                help="Anda dapat memilih maksimal 3 sub-kategori untuk menjaga performa."
+            )
+
         is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
         if st.button("🚀 Mulai Scraping Kategori", use_container_width=True, type="primary", disabled=is_disabled):
             df_proses = df_lapus[kategori_terpilih] if kategori_terpilih else df_lapus
@@ -378,6 +377,21 @@ def show_scraping_page():
         hasil_df = result['df']
         
         if not hasil_df.empty:
+            # --- [MODIFIKASI 2] TAMPILKAN TABEL HASIL AKHIR ---
+            st.markdown("#### Ringkasan Hasil Ditemukan")
+            st.dataframe(
+                hasil_df,
+                use_container_width=True,
+                height=350,
+                column_config={
+                    "Link": st.column_config.LinkColumn("Link", width="medium"),
+                    "Ringkasan": st.column_config.TextColumn("Ringkasan Penting", width="large")
+                }
+            )
+            st.caption(f"Total {len(hasil_df)} berita ditemukan.")
+            st.write("") # Memberi sedikit spasi
+
+            # Siapkan file untuk diunduh
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 hasil_df.to_excel(writer, index=False, sheet_name="Hasil Scraping")
