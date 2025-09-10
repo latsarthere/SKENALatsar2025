@@ -302,6 +302,7 @@ def show_scraping_page():
         st.header(f" 👥 Scraping Berita Kategori - {st.session_state.sub_page}")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
+        return
 
     elif st.session_state.sub_page == "Produksi":
         st.header(f" 🌾 Scraping Berita Kategori - {st.session_state.sub_page}")
