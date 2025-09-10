@@ -239,16 +239,27 @@ def show_saran_page():
     st.title("✍️ Kotak Saran")
     st.markdown("---")
     st.info("Punya ide untuk pengembangan atau menemukan bug? Beri tahu kami di sini!")
-    with st.form("saran_form", clear_on_submit=True):
-        nama = st.text_input("Nama Anda", placeholder="Masukkan nama Anda")
+    with st.form("saran_form"):
+        nama = st.text_input("Nama Anda", placeholder="Masukkan nama lengkap Anda")
         saran = st.text_area("Saran atau Masukan", placeholder="Tuliskan saran, ide, atau laporan bug Anda di sini...", height=200)
-        if st.form_submit_button("🚀 Kirim Saran", use_container_width=True, type="primary"):
-            if saran.strip():
+        
+        submitted = st.form_submit_button("🚀 Kirim Saran", use_container_width=True, type="primary")
+
+        if submitted:
+            # Validasi input
+            nama_valid = len(nama.strip()) > 5
+            saran_valid = len(saran.strip()) > 0
+
+            if nama_valid and saran_valid:
                 if save_saran_to_sheet(nama, saran):
-                    st.success(f"Terima kasih, {nama if nama else 'Sobat SKENA'}! Saran Anda telah kami terima.")
+                    st.success(f"Terima kasih, {nama}! Saran Anda telah kami terima.")
                     st.balloons()
             else:
-                st.warning("Mohon isi kolom saran terlebih dahulu.")
+                # Menampilkan pesan error yang spesifik
+                if not nama_valid:
+                    st.warning("Nama wajib diisi dan harus lebih dari 5 karakter.")
+                if not saran_valid:
+                    st.warning("Kolom saran tidak boleh kosong.")
 
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
@@ -368,3 +379,4 @@ if st.session_state.page in page_functions and (st.session_state.page in ["Home"
     page_functions[st.session_state.page]()
 else:
     st.session_state.page = "Home"; st.rerun()
+
