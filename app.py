@@ -97,22 +97,25 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 
 # --- [PERUBAHAN 3 DARI SAYA] Fungsi ekstrak info diubah menggunakan Selenium ---
 # Fungsi ini sekarang menerima 'driver' sebagai argumen.
-def ekstrak_info_artikel(link_google):
+def ekstrak_info_artikel(driver, link_google):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(link_google, timeout=10, headers=headers, allow_redirects=True)
-        response.raise_for_status()
-
-        url_final = response.url
-        if "news.google.com" in url_final:  # masih link RSS, bukan link asli
-            return None, "", ""
+        driver.get(link_google)
+        # Beri waktu beberapa detik agar JavaScript redirect selesai dieksekusi
+        time.sleep(2.5) 
+        
+        url_final = driver.current_url
+        
+        # Jika setelah menunggu URL-nya masih dari Google, berarti redirect gagal. Lewati.
+        if "google.com/url" in url_final or "consent.google.com" in url_final:
+             return None, "", ""
 
         parsed_uri = urlparse(url_final)
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
-
-        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
         ringkasan = ""
-
+        
+        # Logika pengambilan ringkasan tetap sama
         deskripsi = soup.find('meta', attrs={'name': 'description'})
         if deskripsi and deskripsi.get('content'):
             ringkasan = deskripsi['content']
@@ -120,10 +123,11 @@ def ekstrak_info_artikel(link_google):
             ringkasan = soup.find('meta', attrs={'property': 'og:description'})['content']
         elif soup.find('p'):
             ringkasan = soup.find('p').get_text(strip=True)
-
+            
         return url_final, ringkasan, sumber_dari_url
-
+        
     except Exception:
+        # Jika ada error saat memproses satu link, kembalikan nilai kosong dan lanjut ke link berikutnya.
         return None, "", ""
 
 # --- [PERUBAHAN 4 DARI SAYA] Fungsi start_scraping diubah untuk menggunakan driver Selenium ---
@@ -159,17 +163,12 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
                     
-                    # perbaikan
-                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(entry.link)
-                    
-                    # kalau gagal ambil link asli, skip
-                    if not link_final or "news.google.com" in link_final:
-                        continue
-                    
-                    # hindari duplikat
-                    if any(d['Link'] == link_final for d in semua_hasil):
-                        continue
+                    # Panggil fungsi ekstrak_info_artikel dengan driver
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link)
 
+                    # Jika link_final kosong (gagal redirect) atau link sudah ada, lewati.
+                    if not link_final or any(d['Link'] == link_final for d in semua_hasil):
+                        continue
 
                     judul_asli = entry.title
                     sumber_final = ""
