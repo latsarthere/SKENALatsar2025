@@ -100,19 +100,19 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 # --- [PERUBAHAN 3 DARI SAYA] Fungsi ekstrak info diubah menggunakan Selenium ---
 # Fungsi ini sekarang menerima 'driver' sebagai argumen.
 
-def buat_ringkasan_inti(teks, keyword_list, lokasi_list, max_kalimat=4):
+def buat_ringkasan_cepat(soup, keyword_list, lokasi_list, max_kalimat=4):
     """
-    Membuat ringkasan 2–4 kalimat.
-    Fokus: inti peristiwa, lokasi, angka, serta kalimat yg memuat
-    kendala, penyebab, alasan, bantuan, peningkatan/penurunan, dll.
+    Ringkasan cepat 2–4 kalimat.
+    Ambil dari paragraf awal agar tidak loading lama.
     """
-    if not teks:
+    # Ambil maksimal 5 paragraf pertama saja biar cepat
+    teks_artikel = " ".join(p.get_text(strip=True) for p in soup.find_all('p')[:5])
+    if not teks_artikel:
         return ""
     
-    kalimat_list = re.split(r'(?<=[.!?]) +', teks)
+    kalimat_list = re.split(r'(?<=[.!?]) +', teks_artikel)
     relevan = []
     
-    # kata kunci tambahan (kendala, alasan, dll)
     faktor_kunci = [
         "kendala", "alasan", "penyebab", "peningkatan", "penurunan",
         "kesulitan", "hambatan", "dana tambahan", "bantuan", "dukungan"
@@ -121,22 +121,19 @@ def buat_ringkasan_inti(teks, keyword_list, lokasi_list, max_kalimat=4):
     for kal in kalimat_list:
         kal_lower = kal.lower()
         
-        # pilih kalimat inti
         if any(k.lower() in kal_lower for k in keyword_list) or any(loc.lower() in kal_lower for loc in lokasi_list):
             relevan.append(kal.strip())
         
-        # pilih kalimat faktor penting
         elif any(f in kal_lower for f in faktor_kunci):
             relevan.append(kal.strip())
         
         if len(relevan) >= max_kalimat:
             break
     
-    if not relevan:
-        relevan.append(kalimat_list[0].strip() if kalimat_list else "")
+    if not relevan and kalimat_list:
+        relevan.append(kalimat_list[0].strip())
     
-    ringkasan = " ".join(relevan)
-    return re.sub(r'\s+', ' ', ringkasan)
+    return " ".join(relevan)
 
 def ekstrak_info_artikel(driver, link_google):
     try:
@@ -154,15 +151,9 @@ def ekstrak_info_artikel(driver, link_google):
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        ringkasan = ""
-        # Logika pengambilan ringkasan tetap sama
-        deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'):
-            ringkasan = deskripsi['content']
-        elif soup.find('meta', attrs={'property': 'og:description'}) and soup.find('meta', attrs={'property': 'og:description'}).get('content'):
-            ringkasan = soup.find('meta', attrs={'property': 'og:description'})['content']
-        elif soup.find('p'):
-            ringkasan = soup.find('p').get_text(strip=True)
+        # Ringkasan cepat (2–4 kalimat)
+        ringkasan = buat_ringkasan_cepat(soup, [keyword], lokasi_filter, max_kalimat=4)
+
 
             
         return url_final, ringkasan, sumber_dari_url
