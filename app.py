@@ -215,29 +215,40 @@ def show_home_page():
     if not st.session_state.get('logged_in', False):
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
     st.header("Pilih Kategori Data")
-    col1, col2, col3, col4 = st.columns(4, gap="large")
     is_disabled = not st.session_state.get('logged_in', False)
 
+    # Baris 1
+    col1, col2 = st.columns(2, gap="large")
     with col1:
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
-        if st.button("Pilih Neraca", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Neraca"; st.rerun()
+        if st.button("Pilih Neraca", use_container_width=True, disabled=is_disabled):
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Neraca"
+            st.rerun()
 
-    with col1:
-        st.subheader("👥 Sosial")
-        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
-        if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Sosial"; st.rerun()
-            
     with col2:
         st.subheader("🌾 Produksi")
         st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
-        if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"; st.rerun()
-            
+        if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled):
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"
+            st.rerun()
+
+    # Baris 2
+    col3, col4 = st.columns(2, gap="large")
+    with col3:
+        st.subheader("👥 Sosial")
+        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
+        if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled):
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Sosial"
+            st.rerun()
+
     with col4:
         st.subheader("📰 Lainnya")
         st.write("Informasi seputar lainnya dapat dicari bagian ini.")
-        if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Lainnya"; st.rerun()
-
+        if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled):
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Lainnya"
+            st.rerun()
+            
 def show_panduan_page():
     st.title("📖 Panduan Pengguna")
     st.markdown("---")
