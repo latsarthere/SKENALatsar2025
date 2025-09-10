@@ -65,6 +65,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
     try:
+        # Menambahkan timestamp untuk mencegah caching pada level request
         url_no_cache = f"{url}&t={int(time.time())}"
         df = pd.read_excel(url_no_cache, sheet_name=sheet_name)
         return df
@@ -120,9 +121,10 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(driver, link_google, keyword):
     try:
         driver.get(link_google)
-        time.sleep(2)
+        time.sleep(2) # Beri waktu halaman untuk memuat sepenuhnya
         url_final = driver.current_url
 
+        # Jika URL masih berupa URL redirect Google, lewati
         if "google.com/url" in url_final or "consent.google.com" in url_final:
             return None, "", ""
 
@@ -138,17 +140,20 @@ def ekstrak_info_artikel(driver, link_google, keyword):
         kalimat_list = re.split(r'(?<=[.!?])\s+', teks_artikel)
         ringkasan = ""
 
+        # Cari kalimat yang mengandung keyword
         for kalimat in kalimat_list:
             if keyword.lower() in kalimat.lower():
                 ringkasan = kalimat.strip()
                 break 
 
+        # Jika tidak ada kalimat yang mengandung keyword, ambil kalimat pertama
         if not ringkasan and kalimat_list:
             ringkasan = kalimat_list[0].strip()
 
         return url_final, ringkasan, sumber_dari_url
 
     except Exception:
+        # Jika terjadi error apapun saat ekstraksi, kembalikan nilai kosong
         return None, "", ""
 
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, status_placeholder, keyword_placeholder, table_placeholder, mode_ringkasan):
@@ -178,9 +183,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 scraping_stopped = True
                 break
             
+            # --- TIMER LIVE ---
             elapsed_time = time.time() - start_time
             menit, detik = divmod(int(elapsed_time), 60)
-            status_placeholder.info(f"⏳ Proses Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
+            status_placeholder.info(f"⏳ Durasi Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
             
             if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
@@ -391,7 +397,8 @@ def show_scraping_page():
             st.session_state.scraping_params = {
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
                 'start_date': start_date_input, 'end_date': end_date_input,
-                'mode_ringkasan': mode_ringkasan
+                'mode_ringkasan': mode_ringkasan,
+                'start_time': time.time()  # <-- MENAMBAHKAN WAKTU MULAI
             }
             st.rerun()
 
@@ -442,7 +449,8 @@ def show_scraping_page():
             st.session_state.scraping_params = {
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
                 'start_date': start_date_input, 'end_date': end_date_input,
-                'mode_ringkasan': mode_ringkasan
+                'mode_ringkasan': mode_ringkasan,
+                'start_time': time.time() # <-- MENAMBAHKAN WAKTU MULAI
             }
             st.rerun()
 
@@ -469,26 +477,43 @@ def show_scraping_page():
                 status_placeholder = st.empty()
                 keyword_placeholder = st.empty()
                 table_placeholder = st.empty()
-
+                
+                start_time = params['start_time'] # <-- MENGAMBIL WAKTU MULAI
                 hasil_df = start_scraping(
-                    tanggal_awal, tanggal_akhir, params['df'], df_daerah, time.time(),
+                    tanggal_awal, tanggal_akhir, params['df'], df_daerah, start_time,
                     status_placeholder, keyword_placeholder, table_placeholder,
                     mode_ringkasan=params['mode_ringkasan']
                 )
                 
+                # --- MENGHITUNG DURASI TOTAL SETELAH SELESAI ---
+                end_time = time.time()
+                duration = end_time - start_time
+                
                 status_placeholder.empty()
                 keyword_placeholder.empty()
                 
-                st.session_state.scraping_result = {'df': hasil_df, 'params': params}
+                # --- MENYIMPAN HASIL DAN DURASI ---
+                st.session_state.scraping_result = {
+                    'df': hasil_df, 
+                    'params': params, 
+                    'duration': duration 
+                }
         
         del st.session_state.start_scraping
         if 'stop_scraping' in st.session_state: 
-             del st.session_state.stop_scraping
+            del st.session_state.stop_scraping
         st.rerun()
 
     if st.session_state.get('scraping_result'):
-        st.markdown("---"); st.header("✅ Proses Selesai")
+        st.markdown("---")
         result = st.session_state.scraping_result
+        
+        # --- MENAMPILKAN DURASI TOTAL ---
+        duration = result.get('duration', 0)
+        menit, detik = divmod(int(duration), 60)
+        st.header("✅ Proses Selesai")
+        st.success(f"**Durasi Total:** {menit} menit {detik} detik.")
+        
         hasil_df = result['df']
         
         if not hasil_df.empty:
@@ -517,7 +542,7 @@ def show_scraping_page():
 
             file_bytes = output.getvalue()
             
-            # --- [MODIFIKASI] Logika Penamaan File Baru ---
+            # --- Logika Penamaan File Baru ---
             params = result['params']
             now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             topic_str = st.session_state.get('sub_page', 'Data')
