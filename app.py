@@ -106,10 +106,8 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-# --- [MODIFIKASI] FUNGSI RINGKASAN CERDAS DIHAPUS ---
-
-# --- [MODIFIKASI] FUNGSI EKSTRAK INFO MENJADI SANGAT CEPAT ---
-def ekstrak_info_artikel(driver, link_google):
+# --- [MODIFIKASI] FUNGSI EKSTRAK INFO DENGAN RINGKASAN CEPAT & RELEVAN ---
+def ekstrak_info_artikel(driver, link_google, keyword):
     try:
         driver.get(link_google)
         time.sleep(2)
@@ -122,10 +120,24 @@ def ekstrak_info_artikel(driver, link_google):
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
-        # Langsung ambil seluruh teks dari paragraf tanpa diringkas
         teks_artikel = " ".join(p.get_text(strip=True) for p in soup.find_all('p'))
-        
-        return url_final, teks_artikel, sumber_dari_url
+        if not teks_artikel:
+            return url_final, "", sumber_dari_url
+
+        kalimat_list = re.split(r'(?<=[.!?])\s+', teks_artikel)
+        ringkasan = ""
+
+        # Cari kalimat pertama yang mengandung keyword
+        for kalimat in kalimat_list:
+            if keyword.lower() in kalimat.lower():
+                ringkasan = kalimat.strip()
+                break # Hentikan pencarian setelah menemukan yang pertama
+
+        # Jika tidak ada kalimat dengan keyword, ambil kalimat pertama
+        if not ringkasan and kalimat_list:
+            ringkasan = kalimat_list[0].strip()
+
+        return url_final, ringkasan, sumber_dari_url
 
     except Exception:
         return None, "", ""
@@ -158,7 +170,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link_final, ringkasan_penuh, sumber_dari_url = ekstrak_info_artikel(driver, entry.link)
+                    # Teruskan keyword ke fungsi ekstrak_info_artikel
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword)
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
                     
@@ -169,8 +182,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         if len(parts) == 2 and parts[1].strip():
                             judul_bersih, sumber_final = parts[0].strip(), parts[1].strip()
 
-                    judul_lower, ringkasan_lower = judul_bersih.lower(), ringkasan_penuh.lower()
+                    judul_lower, ringkasan_lower = judul_bersih.lower(), ringkasan.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
+                    
+                    # Cek keyword di judul atau ringkasan
                     keyword_ditemukan = keyword.lower() in judul_lower or keyword.lower() in ringkasan_lower
 
                     if lokasi_ditemukan or keyword_ditemukan:
@@ -182,7 +197,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         new_data = {
                             "Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword, 
                             "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str, 
-                            "Sumber": sumber_final, "Ringkasan": ringkasan_penuh
+                            "Sumber": sumber_final, "Ringkasan": ringkasan
                         }
                         semua_hasil.append(new_data)
 
@@ -195,7 +210,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                                 df_live, use_container_width=True, height=300,
                                 column_config={
                                     "Link": st.column_config.LinkColumn("Link", width="medium"),
-                                    "Ringkasan": st.column_config.TextColumn("Isi Teks Artikel", width="large")
+                                    "Ringkasan": st.column_config.TextColumn("Ringkasan Penting", width="large")
                                 }
                             )
                             st.caption(f"Total berita ditemukan: {len(df_live)}")
