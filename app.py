@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
+import re
+
 
 # --- [PERUBAHAN 1 DARI SAYA] Impor library Selenium ---
 from selenium import webdriver
@@ -97,6 +99,37 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 
 # --- [PERUBAHAN 3 DARI SAYA] Fungsi ekstrak info diubah menggunakan Selenium ---
 # Fungsi ini sekarang menerima 'driver' sebagai argumen.
+
+def buat_ringkasan_inti(teks, keyword_list, lokasi_list, max_kalimat=5):
+    """
+    Membuat ringkasan padat dari artikel tanpa mengubah isi/makna.
+    Fokus pada kalimat yang relevan: lokasi, kata kunci, angka.
+    """
+    if not teks:
+        return ""
+    
+    # Pisahkan teks menjadi kalimat
+    kalimat_list = re.split(r'(?<=[.!?]) +', teks)
+    relevan = []
+    
+    for kal in kalimat_list:
+        kal_lower = kal.lower()
+        if any(k.lower() in kal_lower for k in keyword_list) or any(loc.lower() in kal_lower for loc in lokasi_list):
+            relevan.append(kal.strip())
+        if len(relevan) >= max_kalimat:
+            break
+    
+    if not relevan:
+        # Ambil kalimat pertama jika tidak ada kalimat relevan
+        relevan.append(kalimat_list[0].strip() if kalimat_list else "")
+    
+    # Gabungkan kalimat relevan menjadi ringkasan
+    ringkasan = " ".join(relevan)
+    
+    # Bersihkan spasi berlebih
+    ringkasan = re.sub(r'\s+', ' ', ringkasan)
+    return ringkasan
+
 def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
@@ -114,7 +147,6 @@ def ekstrak_info_artikel(driver, link_google):
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         ringkasan = ""
-        
         # Logika pengambilan ringkasan tetap sama
         deskripsi = soup.find('meta', attrs={'name': 'description'})
         if deskripsi and deskripsi.get('content'):
@@ -123,6 +155,7 @@ def ekstrak_info_artikel(driver, link_google):
             ringkasan = soup.find('meta', attrs={'property': 'og:description'})['content']
         elif soup.find('p'):
             ringkasan = soup.find('p').get_text(strip=True)
+
             
         return url_final, ringkasan, sumber_dari_url
         
