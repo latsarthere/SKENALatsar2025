@@ -136,7 +136,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(link_google):
     """
     Mengekstrak informasi dari URL artikel berita.
-    Prioritas ringkasan: 1. OG Description, 2. Meta Description, 3. Paragraf pertama yang substansial.
+    Prioritas ringkasan: 1. OG Description, 2. Meta Description, 3. Paragraf pertama.
     """
     try:
         headers = {
@@ -166,15 +166,11 @@ def ekstrak_info_artikel(link_google):
             if deskripsi and deskripsi.get('content'):
                 ringkasan = deskripsi['content']
         
-        # Prioritas 3: Fallback ke paragraf pertama yang substansial
+        # Prioritas 3: Fallback ke paragraf pertama jika semua meta tag tidak ada
         if not ringkasan.strip():
-            # Cari semua paragraf dan pilih yang pertama dengan panjang teks yang wajar
-            paragraphs = soup.find_all('p')
-            for p in paragraphs:
-                p_text = p.get_text(strip=True)
-                if len(p_text) > 100: # Ambil paragraf pertama yang panjangnya > 100 karakter
-                    ringkasan = p_text
-                    break
+            first_paragraph = soup.find('p')
+            if first_paragraph:
+                ringkasan = first_paragraph.get_text(strip=True)
 
         return url_final, ringkasan.strip(), sumber_dari_url
 
