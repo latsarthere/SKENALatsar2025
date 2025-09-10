@@ -206,6 +206,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         
                         semua_hasil.append({
                             "Nomor": len(semua_hasil) + 1,
+                            "Kategori": kategori,
                             "Kata Kunci": keyword,
                             "Judul": judul_bersih,
                             "Link": link_final,
@@ -218,7 +219,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
         if semua_hasil:
             df_live = pd.DataFrame(semua_hasil)
-            kolom_urut = ["Nomor", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber", "Ringkasan"]
+            kolom_urut = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber", "Ringkasan"]
             df_live = df_live[kolom_urut]
             with table_placeholder.container():
                 st.markdown("### Hasil Scraping Terkini")
@@ -385,7 +386,11 @@ def show_scraping_page():
     
     kategori_terpilih = []
     if mode_kategori == 'Pilih Kategori Tertentu':
-        kategori_terpilih = st.multiselect('Pilih kategori untuk diproses:', options=original_categories)
+    kategori_terpilih = st.multiselect('Pilih kategori untuk diproses (maksimal 3):', options=original_categories)
+    if len(kategori_terpilih) > 3:
+        st.warning("Maksimal hanya boleh memilih 3 kategori.")
+        kategori_terpilih = kategori_terpilih[:3]
+
 
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
@@ -419,11 +424,26 @@ def show_scraping_page():
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
-                
+            
+                # --- Buat nama file sesuai format ---
+                bagian = st.session_state.sub_page  # Neraca / Sosial / Produksi
+                now = datetime.now()
+                tanggal_scraping = now.strftime("%Y%m%d")
+                jammenitdetik = now.strftime("%H%M%S")
+            
+                if triwulan_input != "Tanggal Custom":
+                    # Contoh: Hasil_Scraping_Neraca_Triwulan 2_2025_20250910_100603
+                    filename = f"Hasil_Scraping_{bagian}_{triwulan_input}_{tahun_int}_{tanggal_scraping}_{jammenitdetik}.xlsx"
+                else:
+                    start_str = start_date_input.strftime("%Y%m%d")
+                    end_str = end_date_input.strftime("%Y%m%d")
+                    # Contoh: Hasil_Scraping_Neraca_20250810 sd 20250901_2025_20250910_100603
+                    filename = f"Hasil_Scraping_{bagian}_{start_str} sd {end_str}_{tahun_int}_{tanggal_scraping}_{jammenitdetik}.xlsx"
+            
                 st.download_button(
                     label="📥 Unduh Hasil Scraping (Excel)",
                     data=output.getvalue(),
-                    file_name=f"Hasil_Scraping_{time.strftime('%Y%m%d-%H%M%S')}.xlsx",
+                    file_name=filename,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
