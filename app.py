@@ -201,8 +201,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 def show_home_page():
-    st.image("logo skena.png", width=200)
-    st.title("Sistem Scraping Fenomena Konawe Selatan")
+    st.image("logo skena full.png", width=200)
     st.markdown("---")
     st.markdown("Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.\n\n_Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Panduan** terlebih dahulu._")
     if not st.session_state.get('logged_in', False):
