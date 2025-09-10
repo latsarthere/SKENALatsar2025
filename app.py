@@ -46,6 +46,7 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
 
+    /* [MODIFIKASI 5] CSS untuk tombol stop berwarna merah */
     .stop-button button {
         background-color: #D9534F;
         color: white;
@@ -65,7 +66,6 @@ st.markdown(custom_css, unsafe_allow_html=True)
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
     try:
-        # Tambahkan timestamp untuk mencegah caching yang salah dari Google Sheets
         url_no_cache = f"{url}&t={int(time.time())}"
         df = pd.read_excel(url_no_cache, sheet_name=sheet_name)
         return df
@@ -118,7 +118,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ekstrak_info_artikel(driver, link_google, keyword):
+def ekstrak_info_artikel(driver, link_google, keyword, with_summary=True):
     try:
         driver.get(link_google)
         time.sleep(2)
@@ -129,6 +129,10 @@ def ekstrak_info_artikel(driver, link_google, keyword):
 
         parsed_uri = urlparse(url_final)
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
+
+        if not with_summary:
+            return url_final, "", sumber_dari_url
+
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
         teks_artikel = " ".join(p.get_text(strip=True) for p in soup.find_all('p'))
@@ -151,7 +155,7 @@ def ekstrak_info_artikel(driver, link_google, keyword):
     except Exception:
         return None, "", ""
 
-def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, status_placeholder, keyword_placeholder, table_placeholder):
+def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, status_placeholder, keyword_placeholder, table_placeholder, mode_ringkasan):
     driver = get_selenium_driver()
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
@@ -159,8 +163,14 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
     gn = GoogleNews(lang='id', country='ID')
     
+    use_summary = (mode_ringkasan == "Dengan Ringkasan (cukup lama)")
+    
+    kolom_tabel = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber"]
+    if use_summary:
+        kolom_tabel.append("Ringkasan")
+
     semua_hasil = []
-    df_live = pd.DataFrame(columns=["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber", "Ringkasan"])
+    df_live = pd.DataFrame(columns=kolom_tabel)
     total_kategori = len(kata_kunci_lapus_dict)
     
     scraping_stopped = False
@@ -185,7 +195,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword)
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword, with_summary=use_summary)
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
                     
@@ -209,21 +219,25 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         new_data = {
                             "Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword, 
                             "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str, 
-                            "Sumber": sumber_final, "Ringkasan": ringkasan
+                            "Sumber": sumber_final
                         }
+                        if use_summary:
+                            new_data["Ringkasan"] = ringkasan
+                        
                         semua_hasil.append(new_data)
-
-                        new_row_df = pd.DataFrame([new_data])
+                        new_row_df = pd.DataFrame([new_data], columns=kolom_tabel)
                         df_live = pd.concat([df_live, new_row_df], ignore_index=True)
 
                         with table_placeholder.container():
                             st.markdown("### Hasil Scraping (Live)")
+                            column_config = {"Link": st.column_config.LinkColumn("Link", width="medium")}
+                            if use_summary:
+                                column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
+                            
+                            # [MODIFIKASI 4] Memperpanjang tinggi tabel live
                             st.dataframe(
-                                df_live, use_container_width=True, height=300,
-                                column_config={
-                                    "Link": st.column_config.LinkColumn("Link", width="medium"),
-                                    "Ringkasan": st.column_config.TextColumn("Ringkasan Penting", width="large")
-                                }
+                                df_live, use_container_width=True, height=500,
+                                column_config=column_config
                             )
                             st.caption(f"Total berita ditemukan: {len(df_live)}")
 
@@ -356,6 +370,12 @@ def show_scraping_page():
         return year_int
 
     if is_manual:
+        # [MODIFIKASI 2] Menambahkan opsi ringkasan untuk mode manual
+        mode_ringkasan = st.radio(
+            "Pilih Opsi Ringkasan:",
+            ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"],
+            horizontal=True, key="manual_ringkasan"
+        )
         kata_kunci_manual = st.text_input("Masukkan kata kunci:", placeholder="Contoh: Bantuan Pangan")
         is_disabled = (triwulan_input == "--Pilih Triwulan--")
         if st.button("🚀 Mulai Scraping Manual", use_container_width=True, type="primary", disabled=is_disabled):
@@ -367,20 +387,32 @@ def show_scraping_page():
             
             df_proses = pd.DataFrame({"Lainnya": [kata_kunci_manual]})
             st.session_state.start_scraping = True
-            st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 'start_date': start_date_input, 'end_date': end_date_input}
+            st.session_state.scraping_params = {
+                'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
+                'start_date': start_date_input, 'end_date': end_date_input,
+                'mode_ringkasan': mode_ringkasan # Menyimpan pilihan ringkasan
+            }
             st.rerun()
 
     else: # Neraca
+        # [MODIFIKASI 2] Menambahkan opsi ringkasan
+        mode_ringkasan = st.radio(
+            "Pilih Opsi Ringkasan:",
+            ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"],
+            horizontal=True, key="kategori_ringkasan"
+        )
         mode_pencarian = st.radio("Pilih Mode Pencarian:", ["Kategori", "Sub Kategori"], horizontal=True)
         
-        # --- [MODIFIKASI] Menambahkan multiselect untuk mode "Kategori" ---
         kategori_terpilih = []
         sub_kategori_terpilih = []
 
         if mode_pencarian == 'Kategori':
+            # [MODIFIKASI 1] Menambahkan max_selections
             kategori_terpilih = st.multiselect(
                 'Pilih Kategori:', 
                 df_kat.columns.tolist(),
+                max_selections=3,
+                help="Anda dapat memilih maksimal 3 kategori.",
                 key='kategori_multiselect'
             )
         elif mode_pencarian == 'Sub Kategori':
@@ -392,7 +424,6 @@ def show_scraping_page():
                 key='sub_kategori_multiselect'
             )
 
-        # Logika untuk menonaktifkan tombol jika tidak ada yang dipilih
         is_disabled = (
             triwulan_input == "--Pilih Triwulan--" or
             (mode_pencarian == 'Kategori' and not kategori_terpilih) or
@@ -405,11 +436,15 @@ def show_scraping_page():
 
             if mode_pencarian == "Kategori":
                 df_proses = df_kat[kategori_terpilih]
-            else: # Mode "Sub Kategori"
+            else:
                 df_proses = df_subkat[sub_kategori_terpilih]
 
             st.session_state.start_scraping = True
-            st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 'start_date': start_date_input, 'end_date': end_date_input}
+            st.session_state.scraping_params = {
+                'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
+                'start_date': start_date_input, 'end_date': end_date_input,
+                'mode_ringkasan': mode_ringkasan # Menyimpan pilihan ringkasan
+            }
             st.rerun()
 
     if st.session_state.get('start_scraping'):
@@ -438,7 +473,8 @@ def show_scraping_page():
 
                 hasil_df = start_scraping(
                     tanggal_awal, tanggal_akhir, params['df'], df_daerah, time.time(),
-                    status_placeholder, keyword_placeholder, table_placeholder
+                    status_placeholder, keyword_placeholder, table_placeholder,
+                    mode_ringkasan=params['mode_ringkasan'] # Mengirim pilihan ke fungsi
                 )
                 
                 status_placeholder.empty()
@@ -458,21 +494,30 @@ def show_scraping_page():
         
         if not hasil_df.empty:
             st.markdown("#### Ringkasan Hasil Ditemukan")
+            
+            use_summary = (result['params']['mode_ringkasan'] == "Dengan Ringkasan (cukup lama)")
+            column_config = {"Link": st.column_config.LinkColumn("Link", width="medium")}
+            if use_summary:
+                column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
+
+            # [MODIFIKASI 4] Memperpanjang tinggi tabel hasil
             st.dataframe(
                 hasil_df,
                 use_container_width=True,
-                height=350,
-                column_config={
-                    "Link": st.column_config.LinkColumn("Link", width="medium"),
-                    "Ringkasan": st.column_config.TextColumn("Ringkasan Penting", width="large")
-                }
+                height=500, 
+                column_config=column_config
             )
             st.caption(f"Total {len(hasil_df)} berita ditemukan.")
             st.write("") 
 
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                hasil_df.to_excel(writer, index=False, sheet_name="Hasil Scraping")
+                # Pastikan kolom ringkasan tidak ada jika tidak digunakan
+                df_to_excel = hasil_df.copy()
+                if not use_summary and "Ringkasan" in df_to_excel.columns:
+                    df_to_excel = df_to_excel.drop(columns=["Ringkasan"])
+                df_to_excel.to_excel(writer, index=False, sheet_name="Hasil Scraping")
+
             file_bytes = output.getvalue()
             
             now = datetime.now()
