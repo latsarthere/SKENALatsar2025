@@ -93,8 +93,6 @@ def upload_to_drive(file_content, filename):
         service = build('drive', 'v3', credentials=creds)
         
         # ID Folder sudah disesuaikan.
-        # PERINGATAN: ID ini dari folder biasa dan kemungkinan akan menyebabkan error.
-        # Ganti dengan ID folder dari dalam Drive Bersama untuk solusi permanen.
         folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ" 
         
         file_metadata = {'name': filename, 'parents': [folder_id]}
@@ -102,7 +100,7 @@ def upload_to_drive(file_content, filename):
                                   mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                   resumable=True)
         
-        # Parameter supportsAllDrives=True tetap disertakan agar siap digunakan untuk Drive Bersama
+        # Parameter supportsAllDrives=True disertakan agar siap digunakan untuk Drive Bersama
         service.files().create(
             body=file_metadata, 
             media_body=media, 
@@ -143,7 +141,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
-        time.sleep(2)  # cukup 2 detik untuk redirect
+        time.sleep(2)  # Cukup 2 detik untuk redirect
         url_final = driver.current_url
 
         if "google.com/url" in url_final or "consent.google.com" in url_final:
@@ -178,7 +176,7 @@ def ekstrak_info_artikel(driver, link_google):
 
     except Exception:
         return None, "", ""
-        
+    
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     driver = get_selenium_driver()
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
@@ -444,4 +442,3 @@ if st.session_state.page in page_functions and (st.session_state.page in ["Home"
     page_functions[st.session_state.page]()
 else:
     st.session_state.page = "Home"; st.rerun()
-
