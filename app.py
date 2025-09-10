@@ -25,10 +25,12 @@ st.set_page_config(
 )
 
 # --- TEMA WARNA & GAYA ---
+# [MODIFIKASI 4] Menghapus warna header agar kompatibel dengan Dark Mode
 custom_css = """
 <style>
     .block-container { padding-top: 2rem; }
-    h1, h2, h3, h4, h5 { color: #0073C4; }
+    /* Baris 'color' dihapus dari sini agar tema Streamlit yang mengaturnya */
+    h1, h2, h3, h4, h5 { } 
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
         background-color: #0073C4;
@@ -150,8 +152,15 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     df_live = pd.DataFrame(columns=["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber", "Ringkasan"])
     total_kategori = len(kata_kunci_lapus_dict)
     
+    scraping_stopped = False
     for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
         for keyword_raw in kata_kunci_list:
+            # [MODIFIKASI 2] Cek apakah tombol stop ditekan
+            if st.session_state.get('stop_scraping', False):
+                status_placeholder.warning("Proses dihentikan oleh pengguna.")
+                scraping_stopped = True
+                break
+            
             elapsed_time = time.time() - start_time
             menit, detik = divmod(int(elapsed_time), 60)
             status_placeholder.info(f"⏳ Proses Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
@@ -211,10 +220,13 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             except Exception as e:
                 st.warning(f"Gagal mencari '{keyword}': {e}")
                 continue
+        
+        if scraping_stopped:
+            break
 
     return pd.DataFrame(semua_hasil)
 
-# --- Sisa Kode (Semua halaman dan navigasi) Tetap Sama ---
+# --- HALAMAN-HALAMAN APLIKASI ---
 def show_home_page():
     with st.container():
         col1, col2, col3 = st.columns([1,3,1])
@@ -286,17 +298,23 @@ def show_scraping_page():
     st.session_state.sub_page = st.radio("Pilih Kategori Data:", sub_page_options, horizontal=True, key="sub_page_radio")
     st.markdown("---")
 
-    if st.session_state.sub_page in ["Sosial", "Produksi"]:
-        st.header(f" Scraping Berita Kategori - {st.session_state.sub_page}")
+    # [MODIFIKASI 3] Perubahan judul header
+    if st.session_state.sub_page == "Sosial":
+        st.header("👥 Scraping Berita - Sosial")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
         return
-
+    elif st.session_state.sub_page == "Produksi":
+        st.header("🌾 Scraping Berita - Produksi")
+        st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
+        st.balloons()
+        return
+    
     is_manual = st.session_state.sub_page == "Lainnya"
     if is_manual:
         st.header("📑 Scraping Manual Berdasarkan Kata Kunci")
     else: # Neraca
-        st.header(f"📊 Scraping Berita Kategori - {st.session_state.sub_page}")
+        st.header(f"📊 Scraping Berita - Neraca")
 
     if not is_manual:
         with st.spinner("Memuat data kata kunci..."):
@@ -306,7 +324,8 @@ def show_scraping_page():
     
     st.subheader("Atur Parameter Scraping")
     tahun_sekarang = date.today().year
-    tahun_input = st.selectbox("Pilih Tahun:", ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1)))
+    # [MODIFIKASI 1] Rentang tahun dimulai dari 2015
+    tahun_input = st.selectbox("Pilih Tahun:", ["--Pilih Tahun--"] + list(range(2015, tahun_sekarang + 1)))
     triwulan_input = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"])
     start_date_input, end_date_input = None, None
     if triwulan_input == "Tanggal Custom":
@@ -327,8 +346,6 @@ def show_scraping_page():
 
     else: # Neraca
         mode_kategori = st.radio("Pilih Opsi Kategori:", ["Semua Kategori", "Pilih Kategori Tertentu"], horizontal=True)
-        
-        # --- [MODIFIKASI 1] BATASAN MAKSIMAL 3 SUB-KATEGORI ---
         kategori_terpilih = []
         if mode_kategori == 'Pilih Kategori Tertentu':
             kategori_terpilih = st.multiselect(
@@ -353,7 +370,17 @@ def show_scraping_page():
             with st.spinner("Memuat data daerah..."):
                 df_daerah = load_data_from_url("https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx")
             if df_daerah is not None:
-                st.markdown("---"); st.header("Proses & Hasil Scraping")
+                st.markdown("---")
+                
+                # [MODIFIKASI 2] Menambahkan kolom untuk tombol stop
+                col_header, col_button = st.columns([3, 1])
+                with col_header:
+                    st.header("Proses & Hasil Scraping")
+                with col_button:
+                    if st.button("🛑 Hentikan Proses", use_container_width=True, key="stop_button"):
+                        st.session_state.stop_scraping = True
+                        st.rerun()
+
                 status_placeholder = st.empty()
                 keyword_placeholder = st.empty()
                 table_placeholder = st.empty()
@@ -369,6 +396,8 @@ def show_scraping_page():
                 st.session_state.scraping_result = {'df': hasil_df, 'params': params}
         
         del st.session_state.start_scraping
+        if 'stop_scraping' in st.session_state: # Hapus state stop setelah selesai
+             del st.session_state.stop_scraping
         st.rerun()
 
     if st.session_state.get('scraping_result'):
@@ -377,7 +406,6 @@ def show_scraping_page():
         hasil_df = result['df']
         
         if not hasil_df.empty:
-            # --- [MODIFIKASI 2] TAMPILKAN TABEL HASIL AKHIR ---
             st.markdown("#### Ringkasan Hasil Ditemukan")
             st.dataframe(
                 hasil_df,
@@ -389,9 +417,8 @@ def show_scraping_page():
                 }
             )
             st.caption(f"Total {len(hasil_df)} berita ditemukan.")
-            st.write("") # Memberi sedikit spasi
+            st.write("") 
 
-            # Siapkan file untuk diunduh
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 hasil_df.to_excel(writer, index=False, sheet_name="Hasil Scraping")
@@ -415,6 +442,7 @@ def show_scraping_page():
             st.rerun()
 
 
+# --- NAVIGASI DAN LOGIKA UTAMA ---
 if "page" not in st.session_state: st.session_state.page = "Home"
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "sub_page" not in st.session_state: st.session_state.sub_page = "Neraca"
