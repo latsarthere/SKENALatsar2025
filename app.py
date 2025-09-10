@@ -144,7 +144,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
-        time.sleep(2) 
+        time.sleep(2)  # cukup 2 detik untuk redirect
         url_final = driver.current_url
 
         if "google.com/url" in url_final or "consent.google.com" in url_final:
@@ -154,34 +154,28 @@ def ekstrak_info_artikel(driver, link_google):
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
-        ringkasan_meta = ""
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        og_desc = soup.find('meta', attrs={'property': 'og:description'})
-        
-        if og_desc and og_desc.get('content'):
-            ringkasan_meta = og_desc['content']
-        elif meta_desc and meta_desc.get('content'):
-            ringkasan_meta = meta_desc['content']
 
-        kalimat_fenomena = ""
-        paragraphs = soup.find_all('p', limit=5)
-        text_content = " ".join([p.get_text(strip=True) for p in paragraphs])
+        # Ambil beberapa paragraf pertama
+        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p')[:5]]
+        text_content = " ".join(paragraphs)
 
-        keywords_regex = r"(karena|penyebab|akibat|dampak|memicu|meningkat|menurun|naik|turun)"
-        sentences = re.split(r'(?<=[.!?])\s+', text_content)
-        
-        kalimat_penting = [s for s in sentences if re.search(keywords_regex, s, re.IGNORECASE)]
-        
+        # Ambil meta description (fallback utama)
+        ringkasan = ""
+        deskripsi = soup.find('meta', attrs={'name': 'description'})
+        if deskripsi and deskripsi.get('content'):
+            ringkasan = deskripsi['content']
+        elif soup.find('meta', attrs={'property': 'og:description'}):
+            ringkasan = soup.find('meta', attrs={'property': 'og:description'}).get('content', '')
+
+        # Cari kalimat penting (penyebab, kenaikan, penurunan, alasan, dampak)
+        keywords = r"(penyebab|karena|akibat|alasan|kenaikan|penurunan|naik|turun|dampak)"
+        sentences = re.split(r'(?<=[.!?]) +', text_content)
+
+        kalimat_penting = [s for s in sentences if re.search(keywords, s, re.IGNORECASE)]
         if kalimat_penting:
-            kalimat_fenomena = " ".join(kalimat_penting[:2])
+            ringkasan = " ".join(kalimat_penting[:2]) + " " + ringkasan
 
-        ringkasan_final = f"{kalimat_fenomena} {ringkasan_meta}".strip()
-
-        if not ringkasan_final and paragraphs:
-            ringkasan_final = paragraphs[0].get_text(strip=True)
-            
-        return url_final, ringkasan_final, sumber_dari_url
+        return url_final, ringkasan.strip(), sumber_dari_url
 
     except Exception:
         return None, "", ""
