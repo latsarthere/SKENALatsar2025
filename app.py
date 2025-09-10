@@ -15,10 +15,6 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-# --- Impor untuk Selenium ---
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
     page_title="SKENA",
@@ -62,17 +58,6 @@ def load_data_from_url(url, sheet_name=0):
         st.error(f"Gagal memuat data dari URL: {e}")
         return None
 
-@st.cache_resource
-def get_selenium_driver():
-    options = Options()
-    options.add_argument("--disable-gpu")
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-    driver = webdriver.Chrome(options=options)
-    return driver
-
 # --- Fungsi untuk Koneksi ke Google API (Sheets & Drive) ---
 @st.cache_resource
 def get_gspread_client():
@@ -96,8 +81,8 @@ def upload_to_drive(file_content, filename):
         
         file_metadata = {'name': filename, 'parents': [folder_id]}
         media = MediaIoBaseUpload(io.BytesIO(file_content), 
-                                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                resumable=True)
+                                  mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                  resumable=True)
         
         service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         return True
@@ -109,7 +94,7 @@ def save_saran_to_sheet(nama, saran):
     try:
         client = get_gspread_client()
         sheet = client.open("Saran dan Masukan SKENA - Streamlit").sheet1
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-m-%d %H:%M:%S")
         new_row = [timestamp, nama, saran]
         sheet.append_row(new_row)
         return True
@@ -130,47 +115,35 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ekstrak_info_artikel(driver, link_google):
+def ekstrak_info_artikel_cepat(link_google):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
     try:
-        driver.get(link_google)
-        time.sleep(2)  # cukup 2 detik untuk redirect
-        url_final = driver.current_url
-
-        if "google.com/url" in url_final or "consent.google.com" in url_final:
+        response = requests.get(link_google, headers=headers, timeout=10, allow_redirects=True)
+        response.raise_for_status()
+        url_final = response.url
+        if "consent.google.com" in url_final:
             return None, "", ""
-
-        parsed_uri = urlparse(url_final)
-        sumber_dari_url = parsed_uri.netloc.replace('www.', '')
-
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-
-        # Ambil beberapa paragraf pertama
-        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p')[:5]]
-        text_content = " ".join(paragraphs)
-
-        # Ambil meta description (fallback utama)
+        sumber_dari_url = urlparse(url_final).netloc.replace('www.', '')
+        soup = BeautifulSoup(response.content, 'html.parser')
         ringkasan = ""
-        deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'):
-            ringkasan = deskripsi['content']
-        elif soup.find('meta', attrs={'property': 'og:description'}):
-            ringkasan = soup.find('meta', attrs={'property': 'og:description'}).get('content', '')
-
-        # Cari kalimat penting (penyebab, kenaikan, penurunan, alasan, dampak)
-        keywords = r"(penyebab|karena|akibat|alasan|kenaikan|penurunan|naik|turun|dampak)"
-        sentences = re.split(r'(?<=[.!?]) +', text_content)
-
-        kalimat_penting = [s for s in sentences if re.search(keywords, s, re.IGNORECASE)]
-        if kalimat_penting:
-            ringkasan = " ".join(kalimat_penting[:2]) + " " + ringkasan
-
-        return url_final, ringkasan.strip(), sumber_dari_url
-
+        og_desc = soup.find('meta', property='og:description')
+        if og_desc and og_desc.get('content'):
+            ringkasan = og_desc['content'].strip()
+        else:
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc and meta_desc.get('content'):
+                ringkasan = meta_desc['content'].strip()
+        if not ringkasan:
+            first_p = soup.find('p')
+            if first_p:
+                ringkasan = first_p.get_text(strip=True)
+        return url_final, ringkasan, sumber_dari_url
     except Exception:
         return None, "", ""
-        
+
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-    driver = get_selenium_driver()
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
@@ -192,7 +165,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link)
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel_cepat(entry.link)
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
                     judul_asli = entry.title
                     sumber_final = ""
@@ -262,7 +235,6 @@ def show_panduan_page():
     if not st.session_state.get('logged_in', False):
         st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
 
-# --- MODIFIKASI: Halaman Dokumentasi dengan embed ---
 def show_documentation_page():
     st.title("🗂️ Dokumentasi")
     folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
@@ -298,19 +270,12 @@ def show_scraping_page():
     st.session_state.sub_page = st.radio("Pilih Kategori Data:", sub_page_options, horizontal=True, key="sub_page_radio")
     st.markdown("---")
 
-    if st.session_state.sub_page == "Sosial":
-        st.header(f" 👥 Scraping Berita Kategori - {st.session_state.sub_page}")
+    if st.session_state.sub_page in ["Sosial", "Produksi"]:
+        st.header(f" Scraping Berita Kategori - {st.session_state.sub_page}")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
         return
 
-    elif st.session_state.sub_page == "Produksi":
-        st.header(f" 🌾 Scraping Berita Kategori - {st.session_state.sub_page}")
-        st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
-        st.balloons()
-        return
-
-    # Logika scraping disatukan di sini untuk menghindari duplikasi
     is_manual = st.session_state.sub_page == "Lainnya"
     if is_manual:
         st.header("📑 Scraping Manual Berdasarkan Kata Kunci")
@@ -323,6 +288,41 @@ def show_scraping_page():
         if df_lapus is None: st.error("Gagal memuat data kata kunci."); return
         st.success("✅ Data kata kunci berhasil dimuat.")
     
+    # Tampilkan hasil jika sudah ada di session state, sebelum parameter
+    if st.session_state.get('scraping_result'):
+        st.markdown("---"); st.header("✅ Proses Selesai")
+        result = st.session_state.scraping_result
+        hasil_df = result['df']
+        
+        if not hasil_df.empty:
+            # Tampilkan tabel hasil di sini juga
+            st.dataframe(hasil_df, use_container_width=True, height=400, column_config={"Judul": st.column_config.TextColumn(width="large"), "Link": st.column_config.LinkColumn("Link Berita", help="Klik untuk membuka tautan berita di tab baru.", width="medium"), "Sumber": st.column_config.TextColumn("Sumber Berita", width="small"), "Ringkasan": st.column_config.TextColumn(width="large")})
+            st.caption(f"Total berita ditemukan: {len(hasil_df)}")
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                hasil_df.to_excel(writer, index=False, sheet_name="Hasil Scraping")
+            file_bytes = output.getvalue()
+            
+            now = datetime.now()
+            if result['params']['triwulan'] != "Tanggal Custom":
+                filename = f"Hasil_Scraping_{st.session_state.sub_page}_{result['params']['triwulan']}_{result['params']['tahun']}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+            else:
+                filename = f"Hasil_Scraping_{st.session_state.sub_page}_Custom_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            st.download_button("📥 Unduh Hasil (Excel)", file_bytes, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            
+            with st.spinner("Mengunggah hasil ke Google Drive..."):
+                if upload_to_drive(file_bytes, filename):
+                    st.success(f"Berhasil mengunggah '{filename}' ke Google Drive.")
+        else:
+            st.warning("Tidak ada berita yang ditemukan sesuai parameter yang dipilih.")
+            
+        if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
+            del st.session_state.scraping_result
+            st.rerun()
+        return # Hentikan eksekusi agar parameter tidak muncul lagi
+
     st.subheader("Atur Parameter Scraping")
     tahun_sekarang = date.today().year
     tahun_input = st.selectbox("Pilih Tahun:", ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1)))
@@ -343,7 +343,6 @@ def show_scraping_page():
             st.session_state.start_scraping = True
             st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 'start_date': start_date_input, 'end_date': end_date_input}
             st.rerun()
-
     else: # Neraca
         mode_kategori = st.radio("Pilih Opsi Kategori:", ["Semua Kategori", "Pilih Kategori Tertentu"], horizontal=True)
         kategori_terpilih = st.multiselect('Pilih sub-kategori:', df_lapus.columns.tolist()) if mode_kategori == 'Pilih Kategori Tertentu' else []
@@ -363,41 +362,17 @@ def show_scraping_page():
                 df_daerah = load_data_from_url("https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx")
             if df_daerah is not None:
                 st.markdown("---"); st.header("Proses & Hasil Scraping")
-                hasil_df = start_scraping(tanggal_awal, tanggal_akhir, params['df'], df_daerah, time.time(), st.empty(), st.empty())
+                # Placeholders untuk status dan tabel live
+                table_placeholder = st.empty()
+                keyword_placeholder = st.empty()
+                hasil_df = start_scraping(tanggal_awal, tanggal_akhir, params['df'], df_daerah, time.time(), table_placeholder, keyword_placeholder)
                 st.session_state.scraping_result = {'df': hasil_df, 'params': params}
         
-        del st.session_state.start_scraping # Hapus state agar tidak running lagi
+        del st.session_state.start_scraping
+        # [PERBAIKAN] Hapus st.rerun() di sini agar tabel live sempat ditampilkan
+        # st.rerun() 
+        # Setelah dihapus, kita perlu me-refresh sekali lagi secara manual untuk masuk ke blok "Proses Selesai"
         st.rerun()
-
-    if st.session_state.get('scraping_result'):
-        st.markdown("---"); st.header("✅ Proses Selesai")
-        result = st.session_state.scraping_result
-        hasil_df = result['df']
-        
-        if not hasil_df.empty:
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                hasil_df.to_excel(writer, index=False, sheet_name="Hasil Scraping")
-            file_bytes = output.getvalue()
-            
-            now = datetime.now()
-            if result['params']['triwulan'] != "Tanggal Custom":
-                filename = f"Hasil_Scraping_{st.session_state.sub_page}_{result['params']['triwulan']}_{result['params']['tahun']}_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
-            else:
-                filename = f"Hasil_Scraping_{st.session_state.sub_page}_Custom_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
-            
-            st.download_button("📥 Unduh Hasil (Excel)", file_bytes, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            
-            with st.spinner("Mengunggah hasil ke Google Drive..."):
-                if upload_to_drive(file_bytes, filename):
-                    st.success(f"Berhasil mengunggah '{filename}' ke Google Drive.")
-                # Pesan error sudah ditangani di dalam fungsi upload
-        else:
-            st.warning("Tidak ada berita yang ditemukan sesuai parameter yang dipilih.")
-            
-        if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
-            del st.session_state.scraping_result
-            st.rerun()
 
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
