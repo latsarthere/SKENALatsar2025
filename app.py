@@ -135,7 +135,7 @@ def buat_ringkasan_cepat(soup, keyword_list, lokasi_list, max_kalimat=4):
     
     return " ".join(relevan)
 
-def ekstrak_info_artikel(driver, link_google):
+def ekstrak_info_artikel(driver, link_google, keyword, lokasi_filter):
     try:
         driver.get(link_google)
         # Beri waktu beberapa detik agar JavaScript redirect selesai dieksekusi
@@ -153,6 +153,13 @@ def ekstrak_info_artikel(driver, link_google):
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         # Ringkasan cepat (2–4 kalimat)
         ringkasan = buat_ringkasan_cepat(soup, [keyword], lokasi_filter, max_kalimat=4)
+
+        return url_final, ringkasan, sumber_dari_url
+        
+    except Exception:
+        # Jika ada error saat memproses satu link, kembalikan nilai kosong dan lanjut ke link berikutnya.
+        return None, "", ""
+
 
 
             
@@ -196,7 +203,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 for entry in search_results['entries']:
                     
                     # Panggil fungsi ekstrak_info_artikel dengan driver
-                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link)
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword, lokasi_filter)
 
                     # Jika link_final kosong (gagal redirect) atau link sudah ada, lewati.
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil):
