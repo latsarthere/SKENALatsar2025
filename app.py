@@ -290,10 +290,10 @@ def show_home_page():
             st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
             
     with col4_btn:
-    st.subheader("📰 Lainnya")
-    st.write("Scraping berita dengan kata kunci manual.")
-    if st.button("Pilih Lainnya", key="home_lainnya", use_container_width=True, disabled=is_disabled):
-        st.session_state.page = "Scraping"; st.session_state.sub_page = "Lainnya"; st.rerun()
+        st.subheader("📰 Lainnya")
+        st.write("Scraping berita dengan kata kunci manual.")
+        if st.button("Pilih Lainnya", key="home_lainnya", use_container_width=True, disabled=is_disabled):
+            st.session_state.page = "Scraping"; st.session_state.sub_page = "Lainnya"; st.rerun()
 
 def show_panduan_page():
     st.title("📖 Panduan Pengguna")
