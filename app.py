@@ -21,7 +21,6 @@ st.set_page_config(
 )
 
 # --- TEMA WARNA & GAYA ---
-# (Kode CSS Anda tidak diubah, tetap sama)
 custom_css = """
 <style>
     /* Mengatur padding utama agar tidak terlalu mepet ke atas */
@@ -96,10 +95,9 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
-        time.sleep(2)  # Cukup 2 detik untuk redirect
+        time.sleep(2) 
         url_final = driver.current_url
 
-        # Jika redirect gagal dan masih di halaman Google, lewati
         if "google.com/url" in url_final or "consent.google.com" in url_final:
             return None, "", ""
 
@@ -107,22 +105,34 @@ def ekstrak_info_artikel(driver, link_google):
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        ringkasan_meta = ""
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        og_desc = soup.find('meta', attrs={'property': 'og:description'})
+        
+        if og_desc and og_desc.get('content'):
+            ringkasan_meta = og_desc['content']
+        elif meta_desc and meta_desc.get('content'):
+            ringkasan_meta = meta_desc['content']
 
-        # Ambil meta description sebagai fallback utama
-        ringkasan = ""
-        deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'):
-            ringkasan = deskripsi['content']
-        elif soup.find('meta', attrs={'property': 'og:description'}):
-            ringkasan = soup.find('meta', attrs={'property': 'og:description'}).get('content', '')
+        kalimat_fenomena = ""
+        paragraphs = soup.find_all('p', limit=5)
+        text_content = " ".join([p.get_text(strip=True) for p in paragraphs])
 
-        # Jika ringkasan dari meta kosong, coba ambil dari paragraf pertama
-        if not ringkasan.strip():
-            first_p = soup.find('p')
-            if first_p:
-                ringkasan = first_p.get_text(strip=True)
+        keywords_regex = r"(karena|penyebab|akibat|dampak|memicu|meningkat|menurun|naik|turun)"
+        sentences = re.split(r'(?<=[.!?])\s+', text_content)
+        
+        kalimat_penting = [s for s in sentences if re.search(keywords_regex, s, re.IGNORECASE)]
+        
+        if kalimat_penting:
+            kalimat_fenomena = " ".join(kalimat_penting[:2])
 
-        return url_final, ringkasan.strip(), sumber_dari_url
+        ringkasan_final = f"{kalimat_fenomena} {ringkasan_meta}".strip()
+
+        if not ringkasan_final and paragraphs:
+            ringkasan_final = paragraphs[0].get_text(strip=True)
+            
+        return url_final, ringkasan_final, sumber_dari_url
 
     except Exception:
         return None, "", ""
@@ -317,18 +327,15 @@ def show_saran_page():
         submitted = st.form_submit_button("🚀 Kirim Saran", use_container_width=True, type="primary")
 
         if submitted:
-            if saran: # Memastikan saran tidak kosong
-                # Di aplikasi nyata, Anda akan menyimpan ini ke database atau Google Sheets
+            if saran:
                 st.success(f"Terima kasih, {nama if nama else 'Sobat SKENA'}! Saran Anda telah kami terima.")
                 st.balloons()
             else:
                 st.warning("Mohon isi kolom saran terlebih dahulu.")
 
-# --- [PERUBAHAN UTAMA] Fungsi show_scraping_page() dirapikan ---
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
     
-    # Pilihan kategori tetap di atas
     sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
     st.session_state.sub_page = st.radio(
         "Pilih Kategori Data:",
@@ -338,21 +345,21 @@ def show_scraping_page():
     )
     st.markdown("---")
     
-    # --- BLOK 1: Untuk Kategori yang Belum Tersedia ---
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         st.header("Segera Hadir!")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
         return
 
-    # --- BLOK 2: Untuk Kategori "Lainnya" (Scraping Manual) ---
     elif st.session_state.sub_page == "Lainnya":
         st.header("📑 Scraping Manual Berdasarkan Kata Kunci")
         
-        # --- Form Input untuk Kategori Lainnya ---
         tahun_sekarang = date.today().year
-        tahun_input = st.selectbox("Pilih Tahun:", options=list(range(2020, tahun_sekarang + 1)), index=len(range(2020, tahun_sekarang + 1))-1)
-        triwulan_input = st.selectbox("Pilih Triwulan:", options=["Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"])
+        tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1))
+        tahun_input = st.selectbox("Pilih Tahun:", options=tahun_list, index=0)
+
+        triwulan_list = ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"]
+        triwulan_input = st.selectbox("Pilih Triwulan:", options=triwulan_list, index=0)
         
         start_date_input, end_date_input = None, None
         if triwulan_input == "Tanggal Custom":
@@ -364,68 +371,75 @@ def show_scraping_page():
         
         kata_kunci_manual = st.text_input("Masukkan kata kunci yang ingin dicari:", placeholder="Contoh: Bantuan Pangan")
 
-        # --- Tombol dan Logika Scraping untuk Kategori Lainnya ---
-        if st.button("🚀 Mulai Scraping Manual", use_container_width=True, type="primary"):
+        is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--")
+
+        if st.button("🚀 Mulai Scraping Manual", use_container_width=True, type="primary", disabled=is_disabled):
             if not kata_kunci_manual.strip():
                 st.warning("Harap isi kata kunci terlebih dahulu.")
-            else:
-                tahun_int = int(tahun_input)
-                tanggal_awal, tanggal_akhir = get_rentang_tanggal(
-                    tahun_int, triwulan_input, start_date_input, end_date_input
-                )
+                return
 
-                if tanggal_awal and tanggal_akhir:
-                    start_time = time.time()
-                    st.markdown("---")
-                    st.header("Proses & Hasil Scraping")
-                    keyword_placeholder = st.empty()
-                    table_placeholder = st.empty()
+            tahun_int = int(tahun_input)
+            tanggal_awal, tanggal_akhir = get_rentang_tanggal(
+                tahun_int, triwulan_input, start_date_input, end_date_input
+            )
 
-                    with table_placeholder.container():
-                        st.info("Menunggu hasil pertama ditemukan...")
+            if tanggal_awal and tanggal_akhir:
+                start_time = time.time()
+                st.markdown("---")
+                st.header("Proses & Hasil Scraping")
+                keyword_placeholder = st.empty()
+                table_placeholder = st.empty()
 
-                    # Bungkus kata kunci manual ke dalam DataFrame agar bisa diproses oleh fungsi start_scraping
-                    df_dummy = pd.DataFrame({"Lainnya": [kata_kunci_manual]})
-                    
-                    with st.spinner("Memuat data pendukung..."):
-                        url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
-                        df_daerah = load_data_from_url(url_daerah)
+                with table_placeholder.container():
+                    st.info("Menunggu hasil pertama ditemukan...")
 
-                    if df_daerah is not None:
-                        hasil_df = start_scraping(
-                            tanggal_awal, tanggal_akhir,
-                            df_dummy, df_daerah,
-                            start_time, table_placeholder, keyword_placeholder
-                        )
+                df_dummy = pd.DataFrame({"Lainnya": [kata_kunci_manual]})
+                
+                with st.spinner("Memuat data pendukung..."):
+                    url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
+                    df_daerah = load_data_from_url(url_daerah)
 
-                        # Logika setelah scraping selesai
-                        end_time = time.time()
-                        total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
-                        st.header("✅ Proses Selesai")
-                        st.success(f"Scraping manual telah selesai dalam {total_duration_str}.")
+                if df_daerah is not None:
+                    hasil_df = start_scraping(
+                        tanggal_awal, tanggal_akhir, df_dummy, df_daerah,
+                        start_time, table_placeholder, keyword_placeholder
+                    )
+                    end_time = time.time()
+                    total_duration_str = f"{int((end_time - start_time) // 60)} menit {int((end_time - start_time) % 60)} detik"
+                    st.header("✅ Proses Selesai")
+                    st.success(f"Scraping manual telah selesai dalam {total_duration_str}.")
 
-                        if not hasil_df.empty:
-                            output = io.BytesIO()
-                            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
-                            
-                            st.download_button(
-                                label="📥 Unduh Hasil Scraping (Excel)",
-                                data=output.getvalue(),
-                                file_name=f"Hasil_Scraping_Manual_{time.strftime('%Y%m%d-%H%M%S')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
+                    if not hasil_df.empty:
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
+                        
+                        now = datetime.now()
+                        tanggal_scraping = now.strftime("%Y%m%d")
+                        jammenitdetik = now.strftime("%H%M%S")
+                        
+                        if triwulan_input != "Tanggal Custom":
+                            filename = f"Hasil_Scraping_Manual_{triwulan_input}_{tahun_int}_{tanggal_scraping}_{jammenitdetik}.xlsx"
                         else:
-                            st.warning("Tidak ada berita yang ditemukan untuk kata kunci tersebut.")
-                    else:
-                        st.error("Gagal memuat data daerah. Proses tidak dapat dilanjutkan.")
+                            start_str = start_date_input.strftime("%Y%m%d")
+                            end_str = end_date_input.strftime("%Y%m%d")
+                            filename = f"Hasil_Scraping_Manual_{start_str}_sd_{end_str}_{tanggal_scraping}_{jammenitdetik}.xlsx"
 
-    # --- BLOK 3: Untuk Kategori Utama (Neraca) ---
+                        st.download_button(
+                            label="📥 Unduh Hasil Scraping (Excel)",
+                            data=output.getvalue(),
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+                    else:
+                        st.warning("Tidak ada berita yang ditemukan untuk kata kunci tersebut.")
+                else:
+                    st.error("Gagal memuat data daerah. Proses tidak dapat dilanjutkan.")
+    
     elif st.session_state.sub_page == "Neraca":
         st.header(f"📊 Scraping Berita Kategori - {st.session_state.sub_page}")
         
-        # --- Memuat data kata kunci ---
         with st.spinner("Memuat data kata kunci..."):
             url_lapus = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
             url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
@@ -438,7 +452,6 @@ def show_scraping_page():
 
         st.success("✅ Data kata kunci berhasil dimuat.")
         
-        # --- Form Input untuk Kategori Neraca ---
         st.subheader("Atur Parameter Scraping")
         tahun_sekarang = date.today().year
         tahun_list = ["--Pilih Tahun--"] + list(range(2020, tahun_sekarang + 1))
@@ -462,7 +475,6 @@ def show_scraping_page():
         if mode_kategori == 'Pilih Kategori Tertentu':
             kategori_terpilih = st.multiselect('Pilih sub-kategori untuk diproses:', options=original_categories)
 
-        # --- Tombol dan Logika Scraping untuk Kategori Neraca ---
         is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
 
         if st.button("🚀 Mulai Scraping Kategori", use_container_width=True, type="primary", disabled=is_disabled):
@@ -571,6 +583,5 @@ elif st.session_state.page == "Dokumentasi" and st.session_state.logged_in:
 elif st.session_state.page == "Saran" and st.session_state.logged_in:
     show_saran_page()
 else:
-    # Jika terjadi kondisi aneh, kembalikan ke Home
     st.session_state.page = "Home"
     st.rerun()
