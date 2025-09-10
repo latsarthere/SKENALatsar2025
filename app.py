@@ -130,39 +130,42 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ekstrak_info_artikel(link_google):
+def ekstrak_info_artikel(driver, link_google):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0 Safari/537.36"
-        }
-        res = requests.get(link_google, headers=headers, timeout=10)
-        if res.status_code != 200:
+        driver.get(link_google)
+        time.sleep(2)
+        url_final = driver.current_url
+        if "google.com/url" in url_final or "consent.google.com" in url_final:
             return None, "", ""
-        url_final = res.url  # follow redirect otomatis
         parsed_uri = urlparse(url_final)
-        sumber_dari_url = parsed_uri.netloc.replace("www.", "")
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        # ambil meta description / og:description
+        sumber_dari_url = parsed_uri.netloc.replace('www.', '')
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
         ringkasan_meta = ""
-        meta_desc = soup.find("meta", attrs={"name": "description"})
-        og_desc = soup.find("meta", attrs={"property": "og:description"})
-        if og_desc and og_desc.get("content"):
-            ringkasan_meta = og_desc["content"]
-        elif meta_desc and meta_desc.get("content"):
-            ringkasan_meta = meta_desc["content"]
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        og_desc = soup.find('meta', attrs={'property': 'og:description'})
+        if og_desc and og_desc.get('content'):
+            ringkasan_meta = og_desc['content']
+        elif meta_desc and meta_desc.get('content'):
+            ringkasan_meta = meta_desc['content']
 
-        # fallback → paragraf pertama
-        if not ringkasan_meta:
-            paragraf = soup.find("p")
-            if paragraf:
-                ringkasan_meta = paragraf.get_text(strip=True)
+        kalimat_fenomena = ""
+        paragraphs = soup.find_all('p', limit=5)
+        text_content = " ".join([p.get_text(strip=True) for p in paragraphs])
+        keywords_regex = r"(karena|penyebab|akibat|dampak|memicu|meningkat|menurun|naik|turun)"
+        sentences = re.split(r'(?<=[.!?])\s+', text_content)
+        kalimat_penting = [s for s in sentences if re.search(keywords_regex, s, re.IGNORECASE)]
+        if kalimat_penting:
+            kalimat_fenomena = " ".join(kalimat_penting[:2])
 
-        return url_final, ringkasan_meta.strip(), sumber_dari_url
+        ringkasan_final = f"{kalimat_fenomena} {ringkasan_meta}".strip()
+        if not ringkasan_final and paragraphs:
+            ringkasan_final = paragraphs[0].get_text(strip=True)
+            
+        return url_final, ringkasan_final, sumber_dari_url
     except Exception:
         return None, "", ""
-
-
+        
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     driver = get_selenium_driver()
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
