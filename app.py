@@ -207,7 +207,16 @@ def show_home_page():
             st.image("logo skena full.png", use_container_width=True)
     st.markdown("---")
 
-    st.markdown("Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.\n\n_Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian **Panduan** terlebih dahulu._")
+    st.markdown(
+    """
+    <div style="text-align: center;">
+        <p>Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.</p>
+        <p><em>Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <strong>Panduan</strong> terlebih dahulu.</em></p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
     if not st.session_state.get('logged_in', False):
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
     st.header("Pilih Kategori Data")
