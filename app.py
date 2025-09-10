@@ -270,12 +270,12 @@ def show_home_page():
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
     
     st.header("Pilih Kategori Data")
-    col1_btn, col2_btn, col3_btn = st.columns(3, gap="large")
+    col1_btn, col2_btn, col3_btn, col4_btn = st.columns(4, gap="large")
     is_disabled = not st.session_state.get('logged_in', False)
     
     with col1_btn:
         st.subheader("👥 Sosial")
-        st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
+        st.write("Data terkait sosial, penduduk, demografi, kemiskinan, pendidikan, dan kesehatan.")
         if st.button("Pilih Sosial", key="home_sosial", use_container_width=True, disabled=is_disabled):
             st.session_state.page = "Scraping"; st.session_state.sub_page = "Sosial"; st.rerun()
     with col2_btn:
@@ -288,6 +288,12 @@ def show_home_page():
         st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
         if st.button("Pilih Produksi", key="home_produksi", use_container_width=True, disabled=is_disabled):
             st.session_state.page = "Scraping"; st.session_state.sub_page = "Produksi"; st.rerun()
+            
+    with col4_btn:
+    st.subheader("📰 Lainnya")
+    st.write("Scraping berita dengan kata kunci manual.")
+    if st.button("Pilih Lainnya", key="home_lainnya", use_container_width=True, disabled=is_disabled):
+        st.session_state.page = "Scraping"; st.session_state.sub_page = "Lainnya"; st.rerun()
 
 def show_panduan_page():
     st.title("📖 Panduan Pengguna")
@@ -337,7 +343,7 @@ def show_saran_page():
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
     
-    sub_page_options = ["Neraca", "Sosial", "Produksi"]
+    sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
     st.session_state.sub_page = st.radio(
         "Pilih Kategori Data:",
         sub_page_options,
@@ -351,7 +357,79 @@ def show_scraping_page():
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
         return
-
+        
+    elif st.session_state.sub_page == "Lainnya":
+            st.header("📑 Scraping Berita - Lainnya")
+    
+            tahun_sekarang = date.today().year
+            tahun_input = st.selectbox("Pilih Tahun:", options=list(range(2020, tahun_sekarang + 1)))
+            triwulan_input = st.selectbox("Pilih Triwulan:", options=["Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"])
+    
+            start_date_input, end_date_input = None, None
+            if triwulan_input == "Tanggal Custom":
+                col1, col2 = st.columns(2)
+                with col1:
+                    start_date_input = st.date_input("Tanggal Awal", date.today() - timedelta(days=30))
+                with col2:
+                    end_date_input = st.date_input("Tanggal Akhir", date.today())
+    
+            kata_kunci_manual = st.text_input("Masukkan kata kunci:", value="alfamart")
+    
+            if st.button("🚀 Mulai Scraping", use_container_width=True, type="primary"):
+                if not kata_kunci_manual.strip():
+                    st.warning("Harap isi kata kunci terlebih dahulu.")
+                else:
+                    tahun_int = int(tahun_input)
+                    tanggal_awal, tanggal_akhir = get_rentang_tanggal(
+                        tahun_int, triwulan_input, start_date_input, end_date_input
+                    )
+    
+                    if tanggal_awal and tanggal_akhir:
+                        start_time = time.time()
+                        keyword_placeholder = st.empty()
+                        table_placeholder = st.empty()
+    
+                        with table_placeholder.container():
+                            st.markdown("### Hasil Scraping Terkini")
+                            st.info("Menunggu hasil pertama ditemukan...")
+    
+                        # Bungkus manual keyword ke DataFrame
+                        df_dummy = pd.DataFrame({"Lainnya": [kata_kunci_manual]})
+                        url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
+                        df_daerah = load_data_from_url(url_daerah)
+    
+                        hasil_df = start_scraping(
+                            tanggal_awal, tanggal_akhir,
+                            df_dummy, df_daerah,
+                            start_time, table_placeholder, keyword_placeholder
+                        )
+    
+                        if not hasil_df.empty:
+                            output = io.BytesIO()
+                            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                hasil_df.to_excel(writer, sheet_name="Hasil Scraping", index=False)
+    
+                            now = datetime.now()
+                            tanggal_scraping = now.strftime("%Y%m%d")
+                            jammenitdetik = now.strftime("%H%M%S")
+    
+                            if triwulan_input != "Tanggal Custom":
+                                filename = f"Hasil_Scraping_Lainnya_{triwulan_input}_{tahun_int}_{tanggal_scraping}_{jammenitdetik}.xlsx"
+                            else:
+                                start_str = start_date_input.strftime("%Y%m%d")
+                                end_str = end_date_input.strftime("%Y%m%d")
+                                filename = f"Hasil_Scraping_Lainnya_{start_str} sd {end_str}_{tahun_int}_{tanggal_scraping}_{jammenitdetik}.xlsx"
+    
+                            st.download_button(
+                                label="📥 Unduh Hasil Scraping (Excel)",
+                                data=output.getvalue(),
+                                file_name=filename,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True
+                            )
+                        else:
+                            st.warning("Tidak ada berita ditemukan.")
+    
     url_lapus = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
     url_daerah = "https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx"
 
