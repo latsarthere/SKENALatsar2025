@@ -345,12 +345,20 @@ def show_scraping_page():
     )
     st.markdown("---")
     
-    if st.session_state.sub_page in ["Sosial", "Produksi"]:
-        st.header("Segera Hadir!")
+    # --- [PERUBAHAN 1] Logika untuk halaman yang belum siap ---
+    if st.session_state.sub_page == "Sosial":
+        st.header(f"👥 Scraping Berita Kategori - {st.session_state.sub_page}")
+        st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
+        st.balloons()
+        return
+        
+    if st.session_state.sub_page == "Produksi":
+        st.header(f"🌾 Scraping Berita Kategori - {st.session_state.sub_page}")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
         return
 
+    # --- Logika untuk halaman "Lainnya" ---
     elif st.session_state.sub_page == "Lainnya":
         st.header("📑 Scraping Manual Berdasarkan Kata Kunci")
         
@@ -434,9 +442,15 @@ def show_scraping_page():
                         )
                     else:
                         st.warning("Tidak ada berita yang ditemukan untuk kata kunci tersebut.")
+                    
+                    # --- [PERUBAHAN 2] Tombol Reset ---
+                    if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
+                        st.rerun()
+
                 else:
                     st.error("Gagal memuat data daerah. Proses tidak dapat dilanjutkan.")
     
+    # --- Logika untuk halaman "Neraca" ---
     elif st.session_state.sub_page == "Neraca":
         st.header(f"📊 Scraping Berita Kategori - {st.session_state.sub_page}")
         
@@ -518,6 +532,10 @@ def show_scraping_page():
                     )
                 else:
                     st.warning("Tidak ada berita yang ditemukan sesuai dengan parameter dan kata kunci yang Anda pilih.")
+                
+                # --- [PERUBAHAN 2] Tombol Reset ---
+                if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
+                    st.rerun()
 
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
