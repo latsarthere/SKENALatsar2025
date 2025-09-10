@@ -391,7 +391,8 @@ def show_scraping_page():
             st.session_state.scraping_params = {
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
                 'start_date': start_date_input, 'end_date': end_date_input,
-                'mode_ringkasan': mode_ringkasan
+                'mode_ringkasan': mode_ringkasan,
+                'start_time_obj': datetime.now() # [MODIFIKASI WAKTU]
             }
             st.rerun()
 
@@ -442,7 +443,8 @@ def show_scraping_page():
             st.session_state.scraping_params = {
                 'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 
                 'start_date': start_date_input, 'end_date': end_date_input,
-                'mode_ringkasan': mode_ringkasan
+                'mode_ringkasan': mode_ringkasan,
+                'start_time_obj': datetime.now() # [MODIFIKASI WAKTU]
             }
             st.rerun()
 
@@ -465,6 +467,11 @@ def show_scraping_page():
                         st.session_state.stop_scraping = True
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
+                
+                # [MODIFIKASI WAKTU] Tampilkan waktu mulai
+                start_time_to_display = params['start_time_obj'].strftime('%H:%M:%S (%d-%m-%Y)')
+                st.info(f"▶️ **Waktu Mulai:** {start_time_to_display}")
+
 
                 status_placeholder = st.empty()
                 keyword_placeholder = st.empty()
@@ -476,10 +483,18 @@ def show_scraping_page():
                     mode_ringkasan=params['mode_ringkasan']
                 )
                 
+                # [MODIFIKASI WAKTU] Tangkap waktu selesai dan simpan
+                end_time_obj = datetime.now()
+                
                 status_placeholder.empty()
                 keyword_placeholder.empty()
                 
-                st.session_state.scraping_result = {'df': hasil_df, 'params': params}
+                st.session_state.scraping_result = {
+                    'df': hasil_df, 
+                    'params': params,
+                    'start_time': params['start_time_obj'],
+                    'end_time': end_time_obj
+                }
         
         del st.session_state.start_scraping
         if 'stop_scraping' in st.session_state: 
@@ -487,9 +502,30 @@ def show_scraping_page():
         st.rerun()
 
     if st.session_state.get('scraping_result'):
-        st.markdown("---"); st.header("✅ Proses Selesai")
         result = st.session_state.scraping_result
         hasil_df = result['df']
+        
+        # [MODIFIKASI WAKTU] Tampilkan ringkasan waktu di hasil akhir
+        st.markdown("---"); st.header("✅ Proses Selesai")
+        start_time = result['start_time']
+        end_time = result['end_time']
+        duration = end_time - start_time
+        
+        start_time_str = start_time.strftime('%H:%M:%S (%d-%m-%Y)')
+        end_time_str = end_time.strftime('%H:%M:%S (%d-%m-%Y)')
+        
+        total_seconds = int(duration.total_seconds())
+        minutes, seconds = divmod(total_seconds, 60)
+        duration_str = f"{minutes} menit {seconds} detik"
+        
+        st.success(f"Proses scraping berhasil diselesaikan dalam **{duration_str}**.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"▶️ **Waktu Mulai:** {start_time_str}")
+        with col2:
+            st.info(f"⏹️ **Waktu Selesai:** {end_time_str}")
+        st.markdown("---")
         
         if not hasil_df.empty:
             st.markdown("#### Ringkasan Hasil Ditemukan")
@@ -517,12 +553,10 @@ def show_scraping_page():
 
             file_bytes = output.getvalue()
             
-            # --- [MODIFIKASI] Logika Penamaan File Baru ---
             params = result['params']
             now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             topic_str = st.session_state.get('sub_page', 'Data')
 
-            # Tentukan string periode
             if params['triwulan'] == "Tanggal Custom":
                 start_str = params['start_date'].strftime('%Y%m%d')
                 end_str = params['end_date'].strftime('%Y%m%d')
@@ -530,10 +564,8 @@ def show_scraping_page():
             else:
                 period_str = f"{params['triwulan']}_{params['tahun']}"
 
-            # Tentukan string kategori/kata kunci
             kategori_list = params['df'].columns.tolist()
             kategori_str = ",".join(kategori_list)
-            # Sanitasi untuk karakter yang tidak valid di nama file
             kategori_str = re.sub(r'[\\/*?:"<>|]', "", kategori_str)
 
             filename = f"Hasil_Scraping_{topic_str}_{period_str}_{kategori_str}_{now_str}.xlsx"
