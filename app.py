@@ -298,8 +298,13 @@ def show_scraping_page():
     st.session_state.sub_page = st.radio("Pilih Kategori Data:", sub_page_options, horizontal=True, key="sub_page_radio")
     st.markdown("---")
 
-    if st.session_state.sub_page in ["Sosial", "Produksi"]:
-        st.header(f" Scraping Berita Kategori - {st.session_state.sub_page}")
+    if st.session_state.sub_page == "Sosial":
+        st.header(f" 👥 Scraping Berita Kategori - {st.session_state.sub_page}")
+        st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
+        st.balloons()
+
+    elif st.session_state.sub_page == "Produksi":
+        st.header(f" 🌾 Scraping Berita Kategori - {st.session_state.sub_page}")
         st.info(f"Fitur scraping untuk data **{st.session_state.sub_page}** sedang dalam pengembangan.")
         st.balloons()
         return
