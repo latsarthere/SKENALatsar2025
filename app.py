@@ -386,10 +386,10 @@ def show_scraping_page():
     
     kategori_terpilih = []
     if mode_kategori == 'Pilih Kategori Tertentu':
-    kategori_terpilih = st.multiselect('Pilih kategori untuk diproses (maksimal 3):', options=original_categories)
-    if len(kategori_terpilih) > 3:
-        st.warning("Maksimal hanya boleh memilih 3 kategori.")
-        kategori_terpilih = kategori_terpilih[:3]
+        kategori_terpilih = st.multiselect('Pilih kategori untuk diproses (maksimal 3):', options=original_categories)
+        if len(kategori_terpilih) > 3:
+            st.warning("Maksimal hanya boleh memilih 3 kategori.")
+            kategori_terpilih = kategori_terpilih[:3]
 
 
     is_disabled = (tahun_input == "--Pilih Tahun--" or triwulan_input == "--Pilih Triwulan--" or (mode_kategori == 'Pilih Kategori Tertentu' and not kategori_terpilih))
