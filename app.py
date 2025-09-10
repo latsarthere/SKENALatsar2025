@@ -111,7 +111,7 @@ def save_saran_to_sheet(nama, saran):
     try:
         client = get_gspread_client()
         sheet = client.open("Saran dan Masukan SKENA - Streamlit").sheet1
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-m-%d %H:%M:%S")
         new_row = [timestamp, nama, saran]
         sheet.append_row(new_row)
         return True
@@ -136,7 +136,7 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(link_google):
     """
     Mengekstrak informasi dari URL artikel berita.
-    Prioritas ringkasan: 1. OG Description, 2. Meta Description, 3. Paragraf pertama.
+    Prioritas ringkasan: 1. OG Description, 2. Meta Description, 3. Paragraf pertama yang substansial.
     """
     try:
         headers = {
@@ -166,11 +166,15 @@ def ekstrak_info_artikel(link_google):
             if deskripsi and deskripsi.get('content'):
                 ringkasan = deskripsi['content']
         
-        # Prioritas 3: Fallback ke paragraf pertama
+        # Prioritas 3: Fallback ke paragraf pertama yang substansial
         if not ringkasan.strip():
-            first_paragraph = soup.find('p')
-            if first_paragraph:
-                ringkasan = first_paragraph.get_text(strip=True)
+            # Cari semua paragraf dan pilih yang pertama dengan panjang teks yang wajar
+            paragraphs = soup.find_all('p')
+            for p in paragraphs:
+                p_text = p.get_text(strip=True)
+                if len(p_text) > 100: # Ambil paragraf pertama yang panjangnya > 100 karakter
+                    ringkasan = p_text
+                    break
 
         return url_final, ringkasan.strip(), sumber_dari_url
 
