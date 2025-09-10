@@ -8,9 +8,6 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
 import re
-#from selenium.webdriver.common.by import By
-#from selenium.webdriver.support.ui import WebDriverWait
-#from selenium.webdriver.support import expected_conditions as EC
 
 # --- Impor untuk integrasi Google Sheets & Drive ---
 import gspread
@@ -18,9 +15,9 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-# --- Impor untuk Selenium ---
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+# --- Impor untuk Selenium yang tidak lagi digunakan ---
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
 
 # --- Konfigurasi Halaman Streamlit ---
 st.set_page_config(
@@ -65,16 +62,10 @@ def load_data_from_url(url, sheet_name=0):
         st.error(f"Gagal memuat data dari URL: {e}")
         return None
 
-@st.cache_resource
-def get_selenium_driver():
-    options = Options()
-    options.add_argument("--disable-gpu")
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-    driver = webdriver.Chrome(options=options)
-    return driver
+# Fungsi get_selenium_driver() dihapus karena tidak lagi digunakan
+# @st.cache_resource
+# def get_selenium_driver():
+#     ...
 
 # --- Fungsi untuk Koneksi ke Google API (Sheets & Drive) ---
 @st.cache_resource
@@ -141,47 +132,55 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ekstrak_info_artikel(driver, link_google):
+# --- FUNGSI EKSTRAKSI ARTIKEL (CEPAT & SEDERHANA) ---
+def ekstrak_info_artikel(link_google):
+    """
+    Mengekstrak informasi dari URL artikel berita.
+    Prioritas ringkasan: 1. OG Description, 2. Meta Description, 3. Paragraf pertama.
+    """
     try:
-        driver.get(link_google)
-        time.sleep(2)  # cukup 2 detik untuk redirect
-        url_final = driver.current_url
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(link_google, headers=headers, timeout=10, allow_redirects=True)
+        response.raise_for_status() 
+
+        url_final = response.url
 
         if "google.com/url" in url_final or "consent.google.com" in url_final:
             return None, "", ""
 
         parsed_uri = urlparse(url_final)
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
+        soup = BeautifulSoup(response.text, 'html.parser')
 
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-
-        # Ambil beberapa paragraf pertama
-        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p')[:5]]
-        text_content = " ".join(paragraphs)
-
-        # Ambil meta description (fallback utama)
         ringkasan = ""
-        deskripsi = soup.find('meta', attrs={'name': 'description'})
-        if deskripsi and deskripsi.get('content'):
-            ringkasan = deskripsi['content']
-        elif soup.find('meta', attrs={'property': 'og:description'}):
-            ringkasan = soup.find('meta', attrs={'property': 'og:description'}).get('content', '')
-
-        # Cari kalimat penting (penyebab, kenaikan, penurunan, alasan, dampak)
-        keywords = r"(penyebab|karena|akibat|alasan|kenaikan|penurunan|naik|turun|dampak)"
-        sentences = re.split(r'(?<=[.!?]) +', text_content)
-
-        kalimat_penting = [s for s in sentences if re.search(keywords, s, re.IGNORECASE)]
-        if kalimat_penting:
-            ringkasan = " ".join(kalimat_penting[:2]) + " " + ringkasan
+        # Prioritas 1: Open Graph (OG) description
+        og_deskripsi = soup.find('meta', attrs={'property': 'og:description'})
+        if og_deskripsi and og_deskripsi.get('content'):
+            ringkasan = og_deskripsi['content']
+        
+        # Prioritas 2: Meta description standar
+        if not ringkasan:
+            deskripsi = soup.find('meta', attrs={'name': 'description'})
+            if deskripsi and deskripsi.get('content'):
+                ringkasan = deskripsi['content']
+        
+        # Prioritas 3: Fallback ke paragraf pertama
+        if not ringkasan.strip():
+            first_paragraph = soup.find('p')
+            if first_paragraph:
+                ringkasan = first_paragraph.get_text(strip=True)
 
         return url_final, ringkasan.strip(), sumber_dari_url
 
+    except requests.exceptions.RequestException:
+        return None, "", ""
     except Exception:
         return None, "", ""
     
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
-    driver = get_selenium_driver()
+    # driver = get_selenium_driver() # -> Dihapus
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
@@ -203,8 +202,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link)
+                    # Pemanggilan fungsi diubah, tidak lagi memerlukan driver
+                    link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(entry.link)
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
+                    
                     judul_asli = entry.title
                     sumber_final = ""
                     judul_bersih = judul_asli
@@ -214,9 +215,11 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             judul_bersih, sumber_final = parts[0].strip(), parts[1].strip()
                         else: sumber_final = sumber_dari_url
                     else: sumber_final = sumber_dari_url
+                    
                     judul_lower, ringkasan_lower, keyword_lower = judul_bersih.lower(), ringkasan.lower(), keyword.lower()
                     lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
                     keyword_ditemukan = keyword_lower in judul_lower or keyword_lower in ringkasan_lower
+                    
                     if lokasi_ditemukan or keyword_ditemukan:
                         try:
                             tanggal_dt = datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %Z')
@@ -445,3 +448,4 @@ if st.session_state.page in page_functions and (st.session_state.page in ["Home"
     page_functions[st.session_state.page]()
 else:
     st.session_state.page = "Home"; st.rerun()
+
