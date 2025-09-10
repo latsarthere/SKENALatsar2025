@@ -92,14 +92,22 @@ def upload_to_drive(file_content, filename):
         )
         service = build('drive', 'v3', credentials=creds)
         
-        folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ" # ID Folder Dokumentasi
+        # --- PERUBAHAN 1: Ganti dengan ID folder di dalam Shared Drive ---
+        folder_id = "ID_FOLDER_BARU_ANDA_DARI_DRIVE_BERSAMA" 
         
         file_metadata = {'name': filename, 'parents': [folder_id]}
-        media = MediaIoBaseUpload(io.BytesIO(file_content), 
-                                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                resumable=True)
+        media = MediaIoBaseUpload(io.BytesIO(file_content),  
+                                  mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                  resumable=True)
         
-        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        # --- PERUBAHAN 2: Tambahkan parameter supportsAllDrives=True ---
+        service.files().create(
+            body=file_metadata, 
+            media_body=media, 
+            fields='id',
+            supportsAllDrives=True  # <-- Tambahkan baris ini
+        ).execute()
+        
         return True
     except Exception as e:
         st.error(f"Gagal mengunggah file ke Google Drive: {e}")
