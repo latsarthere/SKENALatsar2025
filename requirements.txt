@@ -12,3 +12,4 @@ streamlit-aggrid==1.1.8.post1
 lxml_html_clean
 requests-html
 selenium 
+gspread
