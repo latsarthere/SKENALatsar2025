@@ -92,20 +92,22 @@ def upload_to_drive(file_content, filename):
         )
         service = build('drive', 'v3', credentials=creds)
         
-        # --- PERUBAHAN 1: Ganti dengan ID folder di dalam Shared Drive ---
-        folder_id = "ID_FOLDER_BARU_ANDA_DARI_DRIVE_BERSAMA" 
+        # ID Folder sudah disesuaikan.
+        # PERINGATAN: ID ini dari folder biasa dan kemungkinan akan menyebabkan error.
+        # Ganti dengan ID folder dari dalam Drive Bersama untuk solusi permanen.
+        folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ" 
         
         file_metadata = {'name': filename, 'parents': [folder_id]}
         media = MediaIoBaseUpload(io.BytesIO(file_content),  
                                   mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                                   resumable=True)
         
-        # --- PERUBAHAN 2: Tambahkan parameter supportsAllDrives=True ---
+        # Parameter supportsAllDrives=True tetap disertakan agar siap digunakan untuk Drive Bersama
         service.files().create(
             body=file_metadata, 
             media_body=media, 
             fields='id',
-            supportsAllDrives=True  # <-- Tambahkan baris ini
+            supportsAllDrives=True
         ).execute()
         
         return True
