@@ -175,18 +175,20 @@ def ekstrak_info_artikel(driver, link_google, keyword_list=None, lokasi_list=Non
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p')[:6]]
-        text_content = " ".join(paragraphs)
 
-        # Gunakan ringkasan inti (lebih cepat)
+        # Ambil teks lengkap dari semua <p>
+        teks_artikel = " ".join(p.get_text(strip=True) for p in soup.find_all('p'))
+
+        # Pakai ringkasan padat
         if keyword_list is None: keyword_list = []
         if lokasi_list is None: lokasi_list = []
-        ringkasan = buat_ringkasan_inti(text_content, keyword_list, lokasi_list)
+        ringkasan = buat_ringkasan_inti(teks_artikel, keyword_list, lokasi_list)
 
         return url_final, ringkasan.strip(), sumber_dari_url
 
     except Exception:
         return None, "", ""
+
 
     
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
@@ -215,6 +217,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(
                         driver, entry.link, [keyword], lokasi_filter
                     )
+
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
                     judul_asli = entry.title
