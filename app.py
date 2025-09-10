@@ -100,35 +100,43 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 # --- [PERUBAHAN 3 DARI SAYA] Fungsi ekstrak info diubah menggunakan Selenium ---
 # Fungsi ini sekarang menerima 'driver' sebagai argumen.
 
-def buat_ringkasan_inti(teks, keyword_list, lokasi_list, max_kalimat=5):
+def buat_ringkasan_inti(teks, keyword_list, lokasi_list, max_kalimat=4):
     """
-    Membuat ringkasan padat dari artikel tanpa mengubah isi/makna.
-    Fokus pada kalimat yang relevan: lokasi, kata kunci, angka.
+    Membuat ringkasan 2–4 kalimat.
+    Fokus: inti peristiwa, lokasi, angka, serta kalimat yg memuat
+    kendala, penyebab, alasan, bantuan, peningkatan/penurunan, dll.
     """
     if not teks:
         return ""
     
-    # Pisahkan teks menjadi kalimat
     kalimat_list = re.split(r'(?<=[.!?]) +', teks)
     relevan = []
     
+    # kata kunci tambahan (kendala, alasan, dll)
+    faktor_kunci = [
+        "kendala", "alasan", "penyebab", "peningkatan", "penurunan",
+        "kesulitan", "hambatan", "dana tambahan", "bantuan", "dukungan"
+    ]
+    
     for kal in kalimat_list:
         kal_lower = kal.lower()
+        
+        # pilih kalimat inti
         if any(k.lower() in kal_lower for k in keyword_list) or any(loc.lower() in kal_lower for loc in lokasi_list):
             relevan.append(kal.strip())
+        
+        # pilih kalimat faktor penting
+        elif any(f in kal_lower for f in faktor_kunci):
+            relevan.append(kal.strip())
+        
         if len(relevan) >= max_kalimat:
             break
     
     if not relevan:
-        # Ambil kalimat pertama jika tidak ada kalimat relevan
         relevan.append(kalimat_list[0].strip() if kalimat_list else "")
     
-    # Gabungkan kalimat relevan menjadi ringkasan
     ringkasan = " ".join(relevan)
-    
-    # Bersihkan spasi berlebih
-    ringkasan = re.sub(r'\s+', ' ', ringkasan)
-    return ringkasan
+    return re.sub(r'\s+', ' ', ringkasan)
 
 def ekstrak_info_artikel(driver, link_google):
     try:
