@@ -130,45 +130,35 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
     }
     return triwulan_map.get(triwulan, (None, None))
 
-def ekstrak_info_artikel(driver, link_google):
+def ekstrak_info_artikel(link_google):
     try:
-        driver.get(link_google)
-        time.sleep(1)
-        url_final = driver.current_url
-        if "google.com/url" in url_final or "consent.google.com" in url_final:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0 Safari/537.36"
+        }
+        res = requests.get(link_google, headers=headers, timeout=10)
+        if res.status_code != 200:
             return None, "", ""
+        url_final = res.url  # follow redirect otomatis
         parsed_uri = urlparse(url_final)
-        sumber_dari_url = parsed_uri.netloc.replace('www.', '')
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
+        sumber_dari_url = parsed_uri.netloc.replace("www.", "")
+        soup = BeautifulSoup(res.text, "html.parser")
+
         # ambil meta description / og:description
         ringkasan_meta = ""
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        og_desc = soup.find('meta', attrs={'property': 'og:description'})
-        if og_desc and og_desc.get('content'):
-            ringkasan_meta = og_desc['content']
-        elif meta_desc and meta_desc.get('content'):
-            ringkasan_meta = meta_desc['content']
-        
-        # ambil 2 paragraf awal saja
-        paragraphs = [p.get_text(strip=True) for p in soup.find_all('p', limit=2)]
-        text_content = " ".join(paragraphs)
-        
-        # cari kalimat penting
-        kalimat_fenomena = ""
-        keywords_regex = r"(karena|penyebab|akibat|dampak|memicu|meningkat|menurun|naik|turun)"
-        sentences = re.split(r'(?<=[.!?])\s+', text_content)
-        for s in sentences:
-            if re.search(keywords_regex, s, re.IGNORECASE):
-                kalimat_fenomena = s.strip()
-                break
-        
-        # gabung fenomena + meta
-        ringkasan_final = kalimat_fenomena if kalimat_fenomena else ringkasan_meta
-        if not ringkasan_final and paragraphs:
-            ringkasan_final = paragraphs[0]
-        
-        return url_final, ringkasan_final.strip(), sumber_dari_url
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        og_desc = soup.find("meta", attrs={"property": "og:description"})
+        if og_desc and og_desc.get("content"):
+            ringkasan_meta = og_desc["content"]
+        elif meta_desc and meta_desc.get("content"):
+            ringkasan_meta = meta_desc["content"]
+
+        # fallback → paragraf pertama
+        if not ringkasan_meta:
+            paragraf = soup.find("p")
+            if paragraf:
+                ringkasan_meta = paragraf.get_text(strip=True)
+
+        return url_final, ringkasan_meta.strip(), sumber_dari_url
     except Exception:
         return None, "", ""
 
