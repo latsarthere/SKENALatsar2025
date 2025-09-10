@@ -8,15 +8,11 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
 import re
-#from selenium.webdriver.common.by import By
-#from selenium.webdriver.support.ui import WebDriverWait
-#from selenium.webdriver.support import expected_conditions as EC
 
-# --- Impor untuk integrasi Google Sheets & Drive ---
+# --- Impor untuk integrasi Google Sheets ---
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+# CATATAN: Impor untuk Google Drive API (build, MediaIoBaseUpload) telah dihapus
 
 # --- Impor untuk Selenium ---
 from selenium import webdriver
@@ -76,7 +72,7 @@ def get_selenium_driver():
     driver = webdriver.Chrome(options=options)
     return driver
 
-# --- Fungsi untuk Koneksi ke Google API (Sheets & Drive) ---
+# --- Fungsi untuk Koneksi ke Google API (Sheets) ---
 @st.cache_resource
 def get_gspread_client():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -86,35 +82,7 @@ def get_gspread_client():
     client = gspread.authorize(creds)
     return client
 
-# --- Fungsi baru untuk upload file ke Google Drive ---
-def upload_to_drive(file_content, filename):
-    try:
-        scope = ['https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"], scopes=scope
-        )
-        service = build('drive', 'v3', credentials=creds)
-        
-        # ID Folder sudah disesuaikan.
-        folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ" 
-        
-        file_metadata = {'name': filename, 'parents': [folder_id]}
-        media = MediaIoBaseUpload(io.BytesIO(file_content),  
-                                  mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                  resumable=True)
-        
-        # Parameter supportsAllDrives=True disertakan agar siap digunakan untuk Drive Bersama
-        service.files().create(
-            body=file_metadata, 
-            media_body=media, 
-            fields='id',
-            supportsAllDrives=True
-        ).execute()
-        
-        return True
-    except Exception as e:
-        st.error(f"Gagal mengunggah file ke Google Drive: {e}")
-        return False
+# --- FUNGSI UNGGAH KE GOOGLE DRIVE TELAH DIHAPUS ---
 
 def save_saran_to_sheet(nama, saran):
     try:
@@ -161,7 +129,6 @@ def buat_ringkasan_inti(teks, keyword_list, lokasi_list):
     ringkasan = re.sub(r'\s+', ' ', ringkasan)
     return ringkasan
 
-
 def ekstrak_info_artikel(driver, link_google, keyword_list=None, lokasi_list=None):
     try:
         driver.get(link_google)
@@ -188,8 +155,6 @@ def ekstrak_info_artikel(driver, link_google, keyword_list=None, lokasi_list=Non
 
     except Exception:
         return None, "", ""
-
-
     
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, table_placeholder, keyword_placeholder):
     driver = get_selenium_driver()
@@ -217,7 +182,6 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                     link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(
                         driver, entry.link, [keyword], lokasi_filter
                     )
-
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
                     judul_asli = entry.title
@@ -288,7 +252,6 @@ def show_panduan_page():
     if not st.session_state.get('logged_in', False):
         st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
 
-# --- MODIFIKASI: Halaman Dokumentasi dengan embed ---
 def show_documentation_page():
     st.title("🗂️ Dokumentasi")
     folder_id = "1z1_w_FyFmNB7ExfVzFVc3jH5InWmQSvZ"
@@ -336,7 +299,6 @@ def show_scraping_page():
         st.balloons()
         return
 
-    # Logika scraping disatukan di sini untuk menghindari duplikasi
     is_manual = st.session_state.sub_page == "Lainnya"
     if is_manual:
         st.header("📑 Scraping Manual Berdasarkan Kata Kunci")
@@ -414,17 +376,14 @@ def show_scraping_page():
             
             st.download_button("📥 Unduh Hasil (Excel)", file_bytes, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
-            with st.spinner("Mengunggah hasil ke Google Drive..."):
-                if upload_to_drive(file_bytes, filename):
-                    st.success(f"Berhasil mengunggah '{filename}' ke Google Drive.")
-                # Pesan error sudah ditangani di dalam fungsi upload
+            # --- BLOK UNGGAH KE GOOGLE DRIVE TELAH DIHAPUS ---
+            
         else:
             st.warning("Tidak ada berita yang ditemukan sesuai parameter yang dipilih.")
             
         if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
             del st.session_state.scraping_result
             st.rerun()
-
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
 if "page" not in st.session_state: st.session_state.page = "Home"
