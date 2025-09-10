@@ -82,19 +82,28 @@ def get_source_from_url(url):
 
 # --- Konfigurasi Halaman & Tampilan (CSS) ---
 st.set_page_config(page_title="SKENA", page_icon="logo skena.png", layout="wide")
+# --- Konfigurasi Halaman & Tampilan (CSS) ---
+st.set_page_config(page_title="SKENA", page_icon="logo skena.png", layout="wide")
 custom_css = """
 <style>
-    .block-container { padding-top: 2rem; } h1, h2, h3, h4, h5 { color: #0073C4; }
-    div[data-testid="stButton"] > button[kind="primary"], div[data-testid="stForm"] > form > div > button {
-        background-color: #0073C4; color: white; border: none; }
-    div[data-testid="stButton"] > button[kind="primary"]:hover, div[data-testid="stForm"] > form > div > button:hover {
-        background-color: #005A9E; color: white; }
-    [data-testid="stSidebar"] { background-color: #f8f9fa; } .stAlert { border-radius: 5px; }
+    .block-container { padding-top: 2rem; }
+    h1, h2, h3, h4, h5 { color: #0073C4; }
+    div[data-testid="stButton"] > button[kind="primary"],
+    div[data-testid="stForm"] > form > div > button {
+        background-color: #0073C4; color: white; border: none;
+    }
+    div[data-testid="stButton"] > button[kind="primary"]:hover,
+    div[data-testid="stForm"] > form > div > button:hover {
+        background-color: #005A9E; color: white;
+    }
+    [data-testid="stSidebar"] { background-color: #f8f9fa; }
+    .stAlert { border-radius: 5px; }
     .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
 </style>
 """
+st.markdown(custom_css, unsafe_allow_html=True)
 st.markdown(custom_css, unsafe_allow_html=True)
 
 
