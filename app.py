@@ -8,6 +8,9 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
 import re
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # --- Impor untuk integrasi Google Sheets & Drive ---
 import gspread
@@ -141,43 +144,41 @@ def get_rentang_tanggal(tahun: int, triwulan: str, start_date=None, end_date=Non
 def ekstrak_info_artikel(driver, link_google):
     try:
         driver.get(link_google)
-        time.sleep(2) 
-        url_final = driver.current_url
 
+        # Tunggu sampai body ada, max 2 detik
+        WebDriverWait(driver, 2).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+
+        url_final = driver.current_url
         if "google.com/url" in url_final or "consent.google.com" in url_final:
             return None, "", ""
 
         parsed_uri = urlparse(url_final)
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
 
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
-        ringkasan_meta = ""
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        og_desc = soup.find('meta', attrs={'property': 'og:description'})
-        
-        if og_desc and og_desc.get('content'):
-            ringkasan_meta = og_desc['content']
-        elif meta_desc and meta_desc.get('content'):
-            ringkasan_meta = meta_desc['content']
+        # Ambil meta description langsung via JS (lebih cepat daripada BeautifulSoup)
+        ringkasan_meta = driver.execute_script("""
+            let og = document.querySelector('meta[property="og:description"]');
+            let md = document.querySelector('meta[name="description"]');
+            return og ? og.content : (md ? md.content : "");
+        """)
 
-        kalimat_fenomena = ""
-        paragraphs = soup.find_all('p', limit=5)
-        text_content = " ".join([p.get_text(strip=True) for p in paragraphs])
+        # Ambil 2 paragraf pertama saja
+        paragraphs = driver.find_elements(By.TAG_NAME, "p")[:2]
+        text_content = " ".join([p.text for p in paragraphs if p.text.strip()])
 
+        # Cari kalimat penting
         keywords_regex = r"(karena|penyebab|akibat|dampak|memicu|meningkat|menurun|naik|turun)"
         sentences = re.split(r'(?<=[.!?])\s+', text_content)
-        
         kalimat_penting = [s for s in sentences if re.search(keywords_regex, s, re.IGNORECASE)]
-        
-        if kalimat_penting:
-            kalimat_fenomena = " ".join(kalimat_penting[:2])
+        kalimat_fenomena = " ".join(kalimat_penting[:2]) if kalimat_penting else ""
 
+        # Gabungkan hasil
         ringkasan_final = f"{kalimat_fenomena} {ringkasan_meta}".strip()
-
         if not ringkasan_final and paragraphs:
-            ringkasan_final = paragraphs[0].get_text(strip=True)
-            
+            ringkasan_final = paragraphs[0].text.strip()
+
         return url_final, ringkasan_final, sumber_dari_url
 
     except Exception:
