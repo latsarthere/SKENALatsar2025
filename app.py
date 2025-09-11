@@ -268,19 +268,31 @@ def show_home_page():
     with col1:
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
-        if st.button("Pilih Neraca", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Neraca"; st.rerun()
+        if st.button("Pilih Neraca", use_container_width=True, disabled=is_disabled): 
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Neraca"
+            st.rerun()
     with col2:
         st.subheader("🌾 Produksi")
         st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
-        if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"; st.rerun()
+        if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled): 
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Produksi"
+            st.rerun()
     with col3:
         st.subheader("👥 Sosial")
         st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
-        if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Sosial"; st.rerun()
+        if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled): 
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Sosial"
+            st.rerun()
     with col4:
         st.subheader("📰 Lainnya")
         st.write("Informasi seputar lainnya dapat dicari bagian ini.")
-        if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled): st.session_state.page, st.session_state.sub_page = "Scraping", "Lainnya"; st.rerun()
+        if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled): 
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Lainnya"
+            st.rerun()
 
 def show_panduan_page():
     st.title("📖 Panduan Pengguna")
@@ -323,30 +335,33 @@ def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
     sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
 
-    # Tentukan indeks default untuk radio button berdasarkan nilai di session_state
-    # yang diatur dari halaman Home.
+    # Fungsi callback untuk mensinkronkan state utama dengan state widget radio
+    def sync_sub_page_state():
+        st.session_state.sub_page = st.session_state.sub_page_radio_widget
+
+    # Tentukan indeks default untuk radio button.
+    # Ini hanya penting untuk render pertama kali setelah pindah dari halaman Home.
     try:
-        # Cari index dari sub_page yang sudah ada di session state
         default_index = sub_page_options.index(st.session_state.sub_page)
     except (ValueError, KeyError):
-        # Jika tidak ada atau nilainya tidak valid, default ke pilihan pertama (Neraca)
         default_index = 0
 
-    # Tampilkan radio button dengan pilihan default yang sudah ditentukan.
-    # Hasil pilihan pengguna akan langsung memperbarui st.session_state.sub_page.
-    selected_option = st.radio(
+    # Render widget radio. 
+    # 'key' memberi nama unik pada state widget.
+    # 'on_change' memanggil fungsi callback setiap kali nilainya diubah oleh pengguna.
+    st.radio(
         "Pilih Topik Data:",
         sub_page_options,
         horizontal=True,
-        index=default_index, # Ini kunci perbaikannya
-        key="sub_page_radio"
+        index=default_index,
+        key="sub_page_radio_widget", # Beri nama key yang unik untuk widget
+        on_change=sync_sub_page_state
     )
-    # Sinkronkan kembali state utama jika pengguna memilih opsi lain di radio button
-    st.session_state.sub_page = selected_option
     
     st.markdown("---")
 
     # --- Sisa kode di fungsi ini tetap sama ---
+    # Logika selanjutnya akan selalu mengacu pada st.session_state.sub_page yang sudah sinkron
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         icon = "👥" if st.session_state.sub_page == "Sosial" else "🌾"
         st.header(f"{icon} Scraping Berita - {st.session_state.sub_page}")
@@ -540,12 +555,10 @@ def show_scraping_page():
 
             file_bytes = output.getvalue()
             
-            # --- [MODIFIKASI] Logika Penamaan File Baru ---
             params = result['params']
             now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             topic_str = st.session_state.get('sub_page', 'Data')
 
-            # Tentukan string periode
             if params['triwulan'] == "Tanggal Custom":
                 start_str = params['start_date'].strftime('%Y%m%d')
                 end_str = params['end_date'].strftime('%Y%m%d')
@@ -553,10 +566,8 @@ def show_scraping_page():
             else:
                 period_str = f"{params['triwulan']}_{params['tahun']}"
 
-            # Tentukan string kategori/kata kunci
             kategori_list = params['df'].columns.tolist()
             kategori_str = ",".join(kategori_list)
-            # Sanitasi untuk karakter yang tidak valid di nama file
             kategori_str = re.sub(r'[\\/*?:"<>|]', "", kategori_str)
 
             filename = f"Hasil_Scraping_{topic_str}_{period_str}_{kategori_str}_{now_str}.xlsx"
