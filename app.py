@@ -27,7 +27,10 @@ st.set_page_config(
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    .block-container { padding-top: 2rem; }
+    .block-container { 
+        padding-top: 2rem; 
+        padding-bottom: 2rem;
+    }
     h1, h2, h3, h4, h5 { } 
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
@@ -44,6 +47,7 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
+    
     .stop-button button {
         background-color: #D9534F;
         color: white;
@@ -54,7 +58,7 @@ custom_css = """
         color: white;
         border: 1px solid #AC2925;
     }
-    /* CSS untuk tombol scraping warna hijau */
+    
     .scraping-button button {
         background-color: #28a745;
         color: white;
@@ -65,32 +69,50 @@ custom_css = """
         color: white;
     }
 
-    /* --- [MODIFIKASI] CSS untuk membuat st.radio terlihat seperti tabs --- */
+    /* --- [MODIFIKASI] CSS untuk UI yang lebih baik --- */
+
+    /* 1. Gaya Kartu untuk mengelompokkan elemen */
+    .card {
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
+        border-radius: 10px;
+        padding: 25px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.04);
+    }
+
+    /* 2. Gaya st.radio yang diseragamkan menjadi seperti tabs/segmented control */
     div[data-testid="stRadio"] > div {
         display: flex;
         justify-content: stretch;
         width: 100%;
     }
     div[data-testid="stRadio"] label {
-        background-color: #262730; /* Warna dasar untuk dark mode */
-        color: #FAFAFA;
+        background-color: #F0F2F6;
+        color: #31333F;
         padding: 8px 12px;
-        border: 1px solid #4F4F4F;
+        border: 1px solid #D1D1D1;
         border-radius: 5px;
         text-align: center;
         flex-grow: 1;
         margin: 0 2px;
         cursor: pointer;
         transition: all 0.2s ease-in-out;
+        -webkit-user-select: none; /* Safari */
+        -ms-user-select: none; /* IE 10+ */
+        user-select: none; /* Standard syntax */
     }
-    /* Sembunyikan titik radio asli */
+    /* 3. Sembunyikan titik radio asli dengan lebih baik */
     div[data-testid="stRadio"] input[type="radio"] {
-        display: none;
+        opacity: 0;
+        position: fixed;
+        width: 0;
     }
-    /* Style untuk radio button yang dipilih */
+    /* 4. Style untuk radio button yang dipilih */
     div[data-testid="stRadio"] input:checked + div {
         background-color: #0073C4;
-        font-weight: bold;
+        font-weight: 600;
         color: white;
         border-color: #0073C4;
     }
@@ -98,11 +120,10 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# --- FUNGSI-FUNGSI PENDUKUNG ---
+# --- FUNGSI-FUNGSI PENDUKUNG (Tetap sama, tidak perlu diubah) ---
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
     try:
-        # Tambahkan parameter unik untuk mencegah cache pada URL yang sama
         url_no_cache = f"{url}&t={int(time.time())}"
         df = pd.read_excel(url_no_cache, sheet_name=sheet_name)
         return df
@@ -218,11 +239,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             menit, detik = divmod(int(elapsed_time), 60)
             status_placeholder.info(f"⏳ Proses Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
             
-            if pd.isna(keyword_raw):
-                continue
+            if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
-            if not keyword:
-                continue
+            if not keyword: continue
             
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
             search_query = f'"{keyword}" "{nama_daerah}"'
@@ -230,16 +249,12 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
-                    
                     if use_summary:
                         link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword)
                     else:
-                        link_final = entry.link
-                        ringkasan = ""
-                        sumber_dari_url = entry.source.title if entry.source else ""
+                        link_final, ringkasan, sumber_dari_url = entry.link, "", (entry.source.title if entry.source else "")
 
-                    if not link_final or any(d['Link'] == link_final for d in semua_hasil):
-                        continue
+                    if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
                     
                     judul_asli = entry.title
                     judul_bersih, sumber_final = judul_asli, sumber_dari_url
@@ -248,9 +263,9 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         if len(parts) == 2 and parts[1].strip():
                             judul_bersih, sumber_final = parts[0].strip(), parts[1].strip()
 
-                    judul_lower = judul_bersih.lower()
-                    lokasi_ditemukan = any(loc in judul_lower for loc in lokasi_filter)
-                    keyword_ditemukan = keyword.lower() in judul_lower
+                    judul_lower, ringkasan_lower = judul_bersih.lower(), ringkasan.lower()
+                    lokasi_ditemukan = any(loc in judul_lower or loc in ringkasan_lower for loc in lokasi_filter)
+                    keyword_ditemukan = keyword.lower() in judul_lower or keyword.lower() in ringkasan_lower
 
                     if lokasi_ditemukan or keyword_ditemukan:
                         try:
@@ -259,13 +274,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
                         
-                        new_data = {
-                            "Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword, 
-                            "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str, 
-                            "Sumber": sumber_final
-                        }
-                        if use_summary:
-                            new_data["Ringkasan"] = ringkasan
+                        new_data = {"Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword, "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str, "Sumber": sumber_final}
+                        if use_summary: new_data["Ringkasan"] = ringkasan
                         
                         semua_hasil.append(new_data)
                         new_row_df = pd.DataFrame([new_data], columns=kolom_tabel)
@@ -274,77 +284,57 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         with table_placeholder.container():
                             st.markdown("### Hasil Scraping (Live)")
                             column_config = {"Link": st.column_config.LinkColumn("Link", width="medium")}
-                            if use_summary:
-                                column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
+                            if use_summary: column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
                             
-                            st.dataframe(
-                                df_live,
-                                use_container_width=True,
-                                height=500,
-                                column_config=column_config
-                            )
+                            st.dataframe(df_live, use_container_width=True, height=500, column_config=column_config)
                             st.caption(f"Total berita ditemukan: {len(df_live)}")
             except Exception as e:
                 st.warning(f"Gagal mencari '{keyword}': {e}")
                 continue
-        
-        if scraping_stopped:
-            break
+        if scraping_stopped: break
     return pd.DataFrame(semua_hasil)
 
 # --- HALAMAN-HALAMAN APLIKASI ---
 def show_home_page():
     with st.container():
         col1, col2, col3 = st.columns([1, 3, 1])
-        with col2:
-            st.image("logo skena full.png", use_container_width=True)
+        with col2: st.image("logo skena full.png", use_container_width=True)
     st.markdown("---")
-    st.markdown(
-        """<div style="text-align: center;"><p>Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.</p><p><em>Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <strong>Panduan</strong> terlebih dahulu.</em></p></div>""",
-        unsafe_allow_html=True
-    )
+    st.markdown("""<div style="text-align: center;"><p>Halo! Sistem ini merupakan alat bantu BPS Kab. Konawe Selatan untuk pengumpulan data.</p><p><em>Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <strong>Panduan</strong> terlebih dahulu.</em></p></div>""", unsafe_allow_html=True)
     if not st.session_state.get('logged_in', False):
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
-    
     st.header("Pilih Kategori Data")
     is_disabled = not st.session_state.get('logged_in', False)
     col1, col2, col3, col4 = st.columns(4, gap="large")
-    
     with col1:
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
         if st.button("Pilih Neraca", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"
-            st.session_state.sub_page = "Neraca" # Simpan pilihan
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Neraca"
             st.rerun()
     with col2:
         st.subheader("🌾 Produksi")
         st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
         if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"
-            st.session_state.sub_page = "Produksi" # Simpan pilihan
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"
             st.rerun()
     with col3:
         st.subheader("👥 Sosial")
         st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
         if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"
-            st.session_state.sub_page = "Sosial" # Simpan pilihan
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Sosial"
             st.rerun()
     with col4:
         st.subheader("📰 Lainnya")
         st.write("Informasi seputar lainnya dapat dicari bagian ini.")
         if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled):
-            st.session_state.page = "Scraping"
-            st.session_state.sub_page = "Lainnya" # Simpan pilihan
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Lainnya"
             st.rerun()
 
 def show_panduan_page():
     st.title("📖 Panduan Pengguna")
     st.markdown("---")
-    st.markdown(
-        "Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.\n\nAplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet."
-    )
+    st.markdown("Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.\n\nAplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet.")
     if not st.session_state.get('logged_in', False):
         st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
 
@@ -356,10 +346,7 @@ def show_documentation_page():
     st.markdown("---")
     st.subheader("Pratinjau Isi Folder")
     embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}"
-    st.components.v1.html(
-        f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>',
-        height=620
-    )
+    st.components.v1.html(f'<iframe src="{embed_url}" width="100%" height="600" style="border:1px solid #ddd; border-radius: 8px;"></iframe>', height=620)
 
 def show_saran_page():
     st.title("✍️ Kotak Saran")
@@ -377,109 +364,94 @@ def show_saran_page():
                     st.success(f"Terima kasih, {nama}! Saran Anda telah kami terima.")
                     st.balloons()
             else:
-                if not nama_valid:
-                    st.warning("Nama wajib diisi dan harus lebih dari 5 karakter.")
-                if not saran_valid:
-                    st.warning("Kolom saran tidak boleh kosong.")
+                if not nama_valid: st.warning("Nama wajib diisi dan harus lebih dari 5 karakter.")
+                if not saran_valid: st.warning("Kolom saran tidak boleh kosong.")
 
 def show_scraping_page():
     st.title("⚙️ Halaman Scraping Data")
-    st.markdown("Pilih Topik Data:")
-
-    # --- [MODIFIKASI] Menggunakan st.radio yang di-style seperti tabs ---
+    
     sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
-    # Atur pilihan default berdasarkan session_state dari homepage
     default_index = sub_page_options.index(st.session_state.get('sub_page', 'Neraca'))
     
+    st.markdown("<h6>Pilih Topik Data:</h6>", unsafe_allow_html=True)
     selected_topic = st.radio(
-        "Pilih Topik Data:",
-        options=sub_page_options,
+        "Pilih Topik Data:", options=sub_page_options,
         format_func=lambda x: f'{"📊" if x=="Neraca" else "👥" if x=="Sosial" else "🌾" if x=="Produksi" else "📑"} {x}',
-        index=default_index,
-        horizontal=True,
-        label_visibility="collapsed"
+        index=default_index, horizontal=True, label_visibility="collapsed"
     )
-    st.markdown("---")
     
     def validate_year(year_str):
         if not year_str.strip():
-            st.warning("Tahun wajib diisi.")
-            return None
+            st.warning("Tahun wajib diisi."); return None
         if not year_str.isdigit() or len(year_str) != 4:
-            st.warning("Harap masukkan 4 digit angka untuk tahun.")
-            return None
+            st.warning("Harap masukkan 4 digit angka untuk tahun."); return None
         year_int = int(year_str)
         if year_int < 2015:
-            st.warning(f"Tahun tidak boleh kurang dari 2015.")
-            return None
+            st.warning(f"Tahun tidak boleh kurang dari 2015."); return None
         return year_int
     
-    # --- Logika Tampilan Berdasarkan Pilihan Radio/Tabs ---
-    if selected_topic == "Neraca":
+    if selected_topic in ["Sosial", "Produksi"]:
+        icon = "👥" if selected_topic == "Sosial" else "🌾"
+        st.info(f"Fitur scraping untuk data **{selected_topic}** sedang dalam pengembangan.")
+        st.balloons()
+    
+    elif selected_topic == "Neraca":
         with st.spinner("Memuat data kategori & sub-kategori..."):
             base_url = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
             df_kat = load_data_from_url(base_url, sheet_name='Sheet1_Kat')
             df_subkat = load_data_from_url(base_url, sheet_name='Sheet1_SubKat')
-
         if df_kat is None or df_subkat is None:
             st.error("Gagal memuat data. Pastikan sheet 'Sheet1_Kat' dan 'Sheet1_SubKat' ada di Google Sheet.")
         else:
             st.success("✅ Data kategori & sub-kategori berhasil dimuat.")
-            st.subheader("Atur Parameter Scraping")
+            
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("1. Atur Periode Scraping")
             tahun_input_str = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_neraca")
             triwulan_input = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_neraca")
-            
             start_date_input, end_date_input = None, None
             if triwulan_input == "Tanggal Custom":
                 col1, col2 = st.columns(2)
                 start_date_input = col1.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="start_date_neraca")
                 end_date_input = col2.date_input("Tanggal Akhir", date.today(), key="end_date_neraca")
+            st.markdown('</div>', unsafe_allow_html=True)
             
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("2. Atur Mode Pencarian")
             mode_ringkasan = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_neraca")
             mode_pencarian = st.radio("Pilih Mode Pencarian:", ["Kategori", "Sub Kategori"], horizontal=True, key="pencarian_neraca")
             
             kategori_terpilih = []
             if mode_pencarian == 'Kategori':
-                kategori_terpilih = st.multiselect('Pilih Kategori:', df_kat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 kategori.", key='kategori_multiselect_neraca')
+                kategori_terpilih = st.multiselect('Pilih Kategori yang diinginkan:', df_kat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 kategori.", key='kategori_multiselect_neraca')
             elif mode_pencarian == 'Sub Kategori':
-                kategori_terpilih = st.multiselect('Pilih Sub Kategori:', df_subkat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 sub-kategori.", key='subkategori_multiselect_neraca')
-
+                kategori_terpilih = st.multiselect('Pilih Sub Kategori yang diinginkan:', df_subkat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 sub-kategori.", key='subkategori_multiselect_neraca')
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             is_disabled = (triwulan_input == "--Pilih Triwulan--" or not kategori_terpilih)
-
             if st.button("🚀 Mulai Scraping Neraca", use_container_width=True, type="primary", disabled=is_disabled):
                 tahun_input = validate_year(tahun_input_str)
                 if tahun_input:
                     df_proses = df_kat[kategori_terpilih] if mode_pencarian == "Kategori" else df_subkat[kategori_terpilih]
                     st.session_state.start_scraping = True
                     st.session_state.sub_page = "Neraca"
-                    st.session_state.scraping_params = {
-                        'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input,
-                        'start_date': start_date_input, 'end_date': end_date_input,
-                        'mode_ringkasan': mode_ringkasan
-                    }
+                    st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 'start_date': start_date_input, 'end_date': end_date_input, 'mode_ringkasan': mode_ringkasan}
                     st.rerun()
-
-    elif selected_topic == "Sosial":
-        st.info(f"Fitur scraping untuk data **Sosial** sedang dalam pengembangan.")
-        st.balloons()
-
-    elif selected_topic == "Produksi":
-        st.info(f"Fitur scraping untuk data **Produksi** sedang dalam pengembangan.")
-        st.balloons()
-        
+    
     elif selected_topic == "Lainnya":
-        st.subheader("Atur Parameter Scraping")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("1. Atur Parameter")
         tahun_input_str_manual = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_manual")
         triwulan_input_manual = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_manual")
-        
         start_date_input_manual, end_date_input_manual = None, None
         if triwulan_input_manual == "Tanggal Custom":
             col1, col2 = st.columns(2)
             start_date_input_manual = col1.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="start_date_manual")
             end_date_input_manual = col2.date_input("Tanggal Akhir", date.today(), key="end_date_manual")
-        
         mode_ringkasan_manual = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_manual")
-        kata_kunci_manual = st.text_input("Masukkan kata kunci:", placeholder="Contoh: Bantuan Pangan", key="keyword_manual")
+        st.subheader("2. Masukkan Kata Kunci")
+        kata_kunci_manual = st.text_input("Masukkan kata kunci pencarian:", placeholder="Contoh: Bantuan Pangan", key="keyword_manual")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         is_disabled_manual = (triwulan_input_manual == "--Pilih Triwulan--")
         if st.button("🚀 Mulai Scraping Manual", use_container_width=True, type="primary", disabled=is_disabled_manual):
@@ -488,11 +460,7 @@ def show_scraping_page():
                 df_proses = pd.DataFrame({kata_kunci_manual: [kata_kunci_manual]})
                 st.session_state.start_scraping = True
                 st.session_state.sub_page = "Lainnya"
-                st.session_state.scraping_params = {
-                    'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input_manual,
-                    'start_date': start_date_input_manual, 'end_date': end_date_input_manual,
-                    'mode_ringkasan': mode_ringkasan_manual
-                }
+                st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input_manual, 'start_date': start_date_input_manual, 'end_date': end_date_input_manual, 'mode_ringkasan': mode_ringkasan_manual}
                 st.rerun()
             elif not kata_kunci_manual.strip():
                  st.warning("Harap isi kata kunci terlebih dahulu.")
@@ -500,108 +468,67 @@ def show_scraping_page():
     if st.session_state.get('start_scraping'):
         params = st.session_state.scraping_params
         tanggal_awal, tanggal_akhir = get_rentang_tanggal(params['tahun'], params['triwulan'], params['start_date'], params['end_date'])
-        
         if tanggal_awal and tanggal_akhir:
             with st.spinner("Memuat data daerah..."):
                 df_daerah = load_data_from_url("https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx")
             if df_daerah is not None:
                 st.markdown("---")
                 col_header, col_button = st.columns([3, 1])
-                with col_header:
-                    st.header("Proses & Hasil Scraping")
+                with col_header: st.header("Proses & Hasil Scraping")
                 with col_button:
                     st.markdown('<div class="stop-button">', unsafe_allow_html=True)
                     if st.button("🛑 Hentikan Proses", use_container_width=True, key="stop_button"):
-                        st.session_state.stop_scraping = True
-                        st.rerun()
+                        st.session_state.stop_scraping = True; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
-
-                status_placeholder = st.empty()
-                keyword_placeholder = st.empty()
-                table_placeholder = st.empty()
-
-                hasil_df = start_scraping(
-                    tanggal_awal, tanggal_akhir, params['df'], df_daerah, time.time(),
-                    status_placeholder, keyword_placeholder, table_placeholder,
-                    mode_ringkasan=params['mode_ringkasan']
-                )
-                
-                status_placeholder.empty()
-                keyword_placeholder.empty()
+                status_placeholder, keyword_placeholder, table_placeholder = st.empty(), st.empty(), st.empty()
+                hasil_df = start_scraping(tanggal_awal, tanggal_akhir, params['df'], df_daerah, time.time(), status_placeholder, keyword_placeholder, table_placeholder, mode_ringkasan=params['mode_ringkasan'])
+                status_placeholder.empty(); keyword_placeholder.empty()
                 st.session_state.scraping_result = {'df': hasil_df, 'params': params}
-        
         del st.session_state.start_scraping
-        if 'stop_scraping' in st.session_state:
-            del st.session_state.stop_scraping
+        if 'stop_scraping' in st.session_state: del st.session_state.stop_scraping
         st.rerun()
 
     if st.session_state.get('scraping_result'):
-        st.markdown("---")
-        st.header("✅ Proses Selesai")
-        result = st.session_state.scraping_result
-        hasil_df = result['df']
-        
+        st.markdown("---"); st.header("✅ Proses Selesai")
+        result, hasil_df = st.session_state.scraping_result, st.session_state.scraping_result['df']
         if not hasil_df.empty:
             st.markdown("#### Ringkasan Hasil Ditemukan")
             use_summary = (result['params']['mode_ringkasan'] == "Dengan Ringkasan (cukup lama)")
             column_config = {"Link": st.column_config.LinkColumn("Link", width="medium")}
-            if use_summary:
-                column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
-
-            st.dataframe(
-                hasil_df, use_container_width=True, height=500, column_config=column_config
-            )
+            if use_summary: column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
+            st.dataframe(hasil_df, use_container_width=True, height=500, column_config=column_config)
             st.caption(f"Total {len(hasil_df)} berita ditemukan.")
             st.write("")
-
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_to_excel = hasil_df.copy()
                 if not use_summary and "Ringkasan" in df_to_excel.columns:
                     df_to_excel = df_to_excel.drop(columns=["Ringkasan"])
                 df_to_excel.to_excel(writer, index=False, sheet_name="Hasil Scraping")
-
             file_bytes = output.getvalue()
             params = result['params']
             now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             topic_str = st.session_state.get('sub_page', 'Data')
-
             if params['triwulan'] == "Tanggal Custom":
-                start_str = params['start_date'].strftime('%Y%m%d')
-                end_str = params['end_date'].strftime('%Y%m%d')
+                start_str, end_str = params['start_date'].strftime('%Y%m%d'), params['end_date'].strftime('%Y%m%d')
                 period_str = f"{start_str} s.d {end_str}"
             else:
                 period_str = f"{params['triwulan']}_{params['tahun']}"
-
             kategori_list = params['df'].columns.tolist()
             kategori_str = ",".join(kategori_list)
             kategori_str = re.sub(r'[\\/*?:"<>|]', "", kategori_str)
-
             filename = f"Hasil_Scraping_{topic_str}_{period_str}_{kategori_str}_{now_str}.xlsx"
-            
-            st.download_button(
-                "📥 Unduh Hasil (Excel)",
-                file_bytes,
-                filename,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                type="primary"
-            )
+            st.download_button("📥 Unduh Hasil (Excel)", file_bytes, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
         else:
             st.warning("Tidak ada berita yang ditemukan sesuai parameter yang dipilih.")
-            
         if st.button("🔄 Mulai Scraping Baru (Reset)", use_container_width=True):
-            if 'scraping_result' in st.session_state:
-                del st.session_state.scraping_result
+            if 'scraping_result' in st.session_state: del st.session_state.scraping_result
             st.rerun()
 
 # --- NAVIGASI DAN LOGIKA UTAMA ---
-if "page" not in st.session_state:
-    st.session_state.page = "Home"
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "sub_page" not in st.session_state:
-    st.session_state.sub_page = "Neraca"
+if "page" not in st.session_state: st.session_state.page = "Home"
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "sub_page" not in st.session_state: st.session_state.sub_page = "Neraca"
 
 with st.sidebar:
     st.image("logo bps konsel.png")
@@ -612,58 +539,35 @@ with st.sidebar:
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login", use_container_width=True, type="primary"):
                 if username == "user7405" and password == "bps7405":
-                    st.session_state.logged_in = True
-                    st.session_state.page = "Home"
+                    st.session_state.logged_in, st.session_state.page = True, "Home"
                     st.rerun()
                 else:
                     st.warning("Username atau password salah.")
     else:
         st.success(f"Selamat datang, **user7405**!")
         if st.button("Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.page = "Home"
+            st.session_state.logged_in, st.session_state.page = False, "Home"
             st.rerun()
 
     st.write("")
     if st.button("🔄 Reboot Aplikasi", use_container_width=True, help="Klik untuk membersihkan cache dan memulai ulang aplikasi jika terjadi masalah."):
-        st.cache_data.clear()
-        st.cache_resource.clear()
+        st.cache_data.clear(); st.cache_resource.clear()
         st.success("Aplikasi sedang direboot...")
         time.sleep(2)
         st.rerun()
 
-    st.markdown("---")
-    st.header("Menu Navigasi")
-    if st.button("🏠 Home", use_container_width=True):
-        st.session_state.page = "Home"
-        st.rerun()
-    if st.button("📖 Panduan", use_container_width=True):
-        st.session_state.page = "Panduan"
-        st.rerun()
+    st.markdown("---"); st.header("Menu Navigasi")
+    if st.button("🏠 Home", use_container_width=True): st.session_state.page = "Home"; st.rerun()
+    if st.button("📖 Panduan", use_container_width=True): st.session_state.page = "Panduan"; st.rerun()
     if st.session_state.logged_in:
         st.markdown('<div class="scraping-button">', unsafe_allow_html=True)
-        if st.button("⚙️ Scraping", use_container_width=True):
-            st.session_state.page = "Scraping"
-            st.rerun()
+        if st.button("⚙️ Scraping", use_container_width=True): st.session_state.page = "Scraping"; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        if st.button("🗂️ Dokumentasi", use_container_width=True):
-            st.session_state.page = "Dokumentasi"
-            st.rerun()
-        if st.button("✍️ Saran", use_container_width=True):
-            st.session_state.page = "Saran"
-            st.rerun()
+        if st.button("🗂️ Dokumentasi", use_container_width=True): st.session_state.page = "Dokumentasi"; st.rerun()
+        if st.button("✍️ Saran", use_container_width=True): st.session_state.page = "Saran"; st.rerun()
 
-page_functions = {
-    "Home": show_home_page,
-    "Panduan": show_panduan_page,
-    "Scraping": show_scraping_page,
-    "Dokumentasi": show_documentation_page,
-    "Saran": show_saran_page
-}
-
+page_functions = {"Home": show_home_page, "Panduan": show_panduan_page, "Scraping": show_scraping_page, "Dokumentasi": show_documentation_page, "Saran": show_saran_page}
 if st.session_state.page in page_functions and (st.session_state.page in ["Home", "Panduan"] or st.session_state.logged_in):
     page_functions[st.session_state.page]()
 else:
-    st.session_state.page = "Home"
-    st.rerun()
+    st.session_state.page = "Home"; st.rerun()
