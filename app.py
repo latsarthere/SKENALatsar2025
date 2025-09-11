@@ -68,47 +68,6 @@ custom_css = """
         background-color: #218838;
         color: white;
     }
-
-    /* --- [MODIFIKASI] CSS Disederhanakan & Disesuaikan --- */
-
-    /* 1. Gaya st.radio yang diseragamkan */
-    div[data-testid="stRadio"] > div {
-        display: flex;
-        justify-content: stretch;
-        width: 100%;
-        margin-bottom: 25px; /* Jarak di bawah tabs */
-    }
-    div[data-testid="stRadio"] label {
-        background-color: #262730; 
-        color: #FAFAFA; 
-        padding: 8px 12px;
-        border: 1px solid #4F4F4F;
-        border-radius: 5px;
-        text-align: center;
-        flex-grow: 1;
-        margin: 0 2px;
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
-    }
-    div[data-testid="stRadio"] input[type="radio"] {
-        opacity: 0;
-        position: fixed;
-        width: 0;
-    }
-    div[data-testid="stRadio"] input:checked + div {
-        background-color: #0073C4;
-        font-weight: 600;
-        color: white;
-        border-color: #0073C4;
-    }
-    
-    /* 2. Style untuk input field agar konsisten dengan dark mode */
-    div[data-testid="stTextInput"] input,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
-        background-color: #262730;
-        border: 1px solid #4F4F4F;
-        border-radius: 5px;
-    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -367,12 +326,14 @@ def show_scraping_page():
     sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
     default_index = sub_page_options.index(st.session_state.get('sub_page', 'Neraca'))
     
-    st.markdown("<h6>Pilih Topik Data:</h6>", unsafe_allow_html=True)
     selected_topic = st.radio(
-        "Pilih Topik Data:", options=sub_page_options,
+        "Pilih Topik Data:", 
+        options=sub_page_options,
         format_func=lambda x: f'{"📊" if x=="Neraca" else "👥" if x=="Sosial" else "🌾" if x=="Produksi" else "📑"} {x}',
-        index=default_index, horizontal=True, label_visibility="collapsed"
+        index=default_index, 
+        horizontal=True,
     )
+    st.markdown("---")
     
     def validate_year(year_str):
         if not year_str.strip():
