@@ -330,37 +330,12 @@ def show_saran_page():
                 if not nama_valid: st.warning("Nama wajib diisi dan harus lebih dari 5 karakter.")
                 if not saran_valid: st.warning("Kolom saran tidak boleh kosong.")
 
-# --- [MODIFIKASI] Bagian ini yang diubah ---
 def show_scraping_page():
+    # --- [MODIFIKASI] ---
+    # Kode radio button sudah dipindahkan ke sidebar, jadi di sini kita hanya menampilkan judul.
     st.title(f"⚙️ Halaman Scraping Data")
-    sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
-
-    # Fungsi callback untuk mensinkronkan state utama dengan state widget radio
-    def sync_sub_page_state():
-        st.session_state.sub_page = st.session_state.sub_page_radio_widget
-
-    # Tentukan indeks default untuk radio button.
-    # Ini hanya penting untuk render pertama kali setelah pindah dari halaman Home.
-    try:
-        default_index = sub_page_options.index(st.session_state.sub_page)
-    except (ValueError, KeyError):
-        default_index = 0
-
-    # Render widget radio. 
-    # 'key' memberi nama unik pada state widget.
-    # 'on_change' memanggil fungsi callback setiap kali nilainya diubah oleh pengguna.
-    st.radio(
-        "Pilih Topik Data:",
-        sub_page_options,
-        horizontal=True,
-        index=default_index,
-        key="sub_page_radio_widget", # Beri nama key yang unik untuk widget
-        on_change=sync_sub_page_state
-    )
-    
     st.markdown("---")
 
-    # --- Sisa kode di fungsi ini tetap sama ---
     # Logika selanjutnya akan selalu mengacu pada st.session_state.sub_page yang sudah sinkron
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         icon = "👥" if st.session_state.sub_page == "Sosial" else "🌾"
@@ -604,6 +579,7 @@ with st.sidebar:
         st.success(f"Selamat datang, **user7405**!")
         if st.button("Logout", use_container_width=True):
             st.session_state.logged_in = False; st.session_state.page = "Home"; st.rerun()
+
     st.markdown("---"); st.header("Menu Navigasi")
     if st.button("🏠 Home", use_container_width=True): st.session_state.page = "Home"; st.rerun()
     if st.button("📖 Panduan", use_container_width=True): st.session_state.page = "Panduan"; st.rerun()
@@ -611,6 +587,35 @@ with st.sidebar:
         if st.button("⚙️ Scraping", use_container_width=True): st.session_state.page = "Scraping"; st.rerun()
         if st.button("🗂️ Dokumentasi", use_container_width=True): st.session_state.page = "Dokumentasi"; st.rerun()
         if st.button("✍️ Saran", use_container_width=True): st.session_state.page = "Saran"; st.rerun()
+
+    # --- [MODIFIKASI] Tombol radio ditambahkan di sini ---
+    # Tampilkan pilihan topik hanya jika sedang di halaman Scraping
+    if st.session_state.page == "Scraping":
+        st.markdown("---")
+        st.header("Pilih Topik Data")
+        
+        sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
+
+        # Fungsi callback untuk mensinkronkan state
+        def sync_sub_page_state():
+            st.session_state.sub_page = st.session_state.sub_page_radio_widget
+
+        # Tentukan indeks default
+        try:
+            default_index = sub_page_options.index(st.session_state.sub_page)
+        except (ValueError, KeyError):
+            default_index = 0
+
+        # Render widget radio di sidebar
+        st.radio(
+            "Topik Data:",
+            sub_page_options,
+            index=default_index,
+            key="sub_page_radio_widget",
+            on_change=sync_sub_page_state,
+            label_visibility="collapsed" # Sembunyikan label karena sudah ada header
+        )
+
 
 page_functions = {"Home": show_home_page, "Panduan": show_panduan_page, "Scraping": show_scraping_page, "Dokumentasi": show_documentation_page, "Saran": show_saran_page}
 if st.session_state.page in page_functions and (st.session_state.page in ["Home", "Panduan"] or st.session_state.logged_in):
