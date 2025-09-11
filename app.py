@@ -54,7 +54,7 @@ custom_css = """
         color: white;
         border: 1px solid #AC2925;
     }
-    /* --- [MODIFIKASI] CSS untuk tombol scraping warna hijau --- */
+    /* CSS untuk tombol scraping warna hijau */
     .scraping-button button {
         background-color: #28a745; /* Warna hijau */
         color: white;
@@ -72,6 +72,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 @st.cache_data
 def load_data_from_url(url, sheet_name=0):
     try:
+        # Tambahkan parameter unik untuk mencegah cache pada URL yang sama
         url_no_cache = f"{url}&t={int(time.time())}"
         df = pd.read_excel(url_no_cache, sheet_name=sheet_name)
         return df
@@ -614,7 +615,7 @@ with st.sidebar:
             st.session_state.page = "Home"
             st.rerun()
 
-    # --- [MODIFIKASI] Tombol Reboot Aplikasi ---
+    # Tombol Reboot Aplikasi
     st.write("") # Memberi sedikit spasi
     if st.button("🔄 Reboot Aplikasi", use_container_width=True, help="Klik untuk membersihkan cache dan memulai ulang aplikasi jika terjadi masalah."):
         # Membersihkan cache data dan resource
@@ -633,7 +634,7 @@ with st.sidebar:
         st.session_state.page = "Panduan"
         st.rerun()
     if st.session_state.logged_in:
-        # --- [MODIFIKASI] Bungkus tombol scraping dengan div untuk styling ---
+        # Bungkus tombol scraping dengan div untuk styling
         st.markdown('<div class="scraping-button">', unsafe_allow_html=True)
         if st.button("⚙️ Scraping", use_container_width=True):
             st.session_state.page = "Scraping"
