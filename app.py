@@ -69,27 +69,26 @@ custom_css = """
         color: white;
     }
 
-    /* --- [MODIFIKASI] CSS untuk st.radio agar tampil seperti tabs dan cocok dark mode --- */
+    /* --- [MODIFIKASI] CSS Disederhanakan & Disesuaikan --- */
+
+    /* 1. Gaya st.radio yang diseragamkan */
     div[data-testid="stRadio"] > div {
         display: flex;
         justify-content: stretch;
         width: 100%;
-        margin-bottom: 20px; /* Tambahkan sedikit jarak di bawah tabs */
+        margin-bottom: 25px; /* Jarak di bawah tabs */
     }
     div[data-testid="stRadio"] label {
-        background-color: #262730; /* Latar belakang non-aktif untuk dark mode */
-        color: #FAFAFA; /* Warna teks non-aktif untuk dark mode */
+        background-color: #262730; 
+        color: #FAFAFA; 
         padding: 8px 12px;
-        border: 1px solid #4F4F4F; /* Border untuk dark mode */
+        border: 1px solid #4F4F4F;
         border-radius: 5px;
         text-align: center;
         flex-grow: 1;
         margin: 0 2px;
         cursor: pointer;
         transition: all 0.2s ease-in-out;
-        -webkit-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
     }
     div[data-testid="stRadio"] input[type="radio"] {
         opacity: 0;
@@ -102,26 +101,18 @@ custom_css = """
         color: white;
         border-color: #0073C4;
     }
-    /* Style untuk dropdown/selectbox agar terlihat lebih baik di dark mode */
+    
+    /* 2. Style untuk input field agar konsisten dengan dark mode */
+    div[data-testid="stTextInput"] input,
     div[data-testid="stSelectbox"] div[data-baseweb="select"] {
         background-color: #262730;
-        color: #FAFAFA;
         border: 1px solid #4F4F4F;
         border-radius: 5px;
-    }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] div[data-baseweb="popover"] {
-        background-color: #262730;
-        color: #FAFAFA;
-    }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] div[role="option"] {
-        color: #FAFAFA !important;
-    }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] div[role="option"]:hover {
-        background-color: #005A9E !important;
     }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
+
 
 # --- FUNGSI-FUNGSI PENDUKUNG (Tetap sama, tidak perlu diubah) ---
 @st.cache_data
