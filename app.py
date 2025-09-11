@@ -259,7 +259,6 @@ def show_home_page():
     st.header("Pilih Kategori Data")
     is_disabled = not st.session_state.get('logged_in', False)
     
-    # --- [MODIFIKASI] Urutan kolom diubah di sini ---
     col1, col2, col3, col4 = st.columns(4, gap="large")
 
     with col1:
@@ -363,7 +362,9 @@ def show_scraping_page():
         else:
             st.success("✅ Data kategori & sub-kategori berhasil dimuat.")
             
-            st.subheader("1. Atur Periode Scraping")
+            # --- [MODIFIKASI] Mengganti subjudul bernomor ---
+            st.subheader("Atur Parameter Scraping")
+            
             tahun_input_str = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_neraca")
             triwulan_input = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_neraca")
             start_date_input, end_date_input = None, None
@@ -372,7 +373,6 @@ def show_scraping_page():
                 start_date_input = col1.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="start_date_neraca")
                 end_date_input = col2.date_input("Tanggal Akhir", date.today(), key="end_date_neraca")
             
-            st.subheader("2. Atur Mode Pencarian")
             mode_ringkasan = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_neraca")
             mode_pencarian = st.radio("Pilih Mode Pencarian:", ["Kategori", "Sub Kategori"], horizontal=True, key="pencarian_neraca")
             
@@ -393,7 +393,9 @@ def show_scraping_page():
                     st.rerun()
     
     elif selected_topic == "Lainnya":
-        st.subheader("1. Atur Parameter")
+        # --- [MODIFIKASI] Mengganti subjudul bernomor ---
+        st.subheader("Atur Parameter Scraping")
+        
         tahun_input_str_manual = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_manual")
         triwulan_input_manual = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_manual")
         start_date_input_manual, end_date_input_manual = None, None
@@ -402,7 +404,6 @@ def show_scraping_page():
             start_date_input_manual = col1.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="start_date_manual")
             end_date_input_manual = col2.date_input("Tanggal Akhir", date.today(), key="end_date_manual")
         mode_ringkasan_manual = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_manual")
-        st.subheader("2. Masukkan Kata Kunci")
         kata_kunci_manual = st.text_input("Masukkan kata kunci pencarian:", placeholder="Contoh: Bantuan Pangan", key="keyword_manual")
         
         is_disabled_manual = (triwulan_input_manual == "--Pilih Triwulan--")
