@@ -331,15 +331,11 @@ def show_saran_page():
                 if not saran_valid: st.warning("Kolom saran tidak boleh kosong.")
 
 def show_scraping_page():
-    # Judul halaman tetap di panel utama
     st.title(f"⚙️ Halaman Scraping Data")
     
-    # Konten utama halaman akan menyesuaikan berdasarkan pilihan di sidebar
-    # st.session_state.sub_page akan dikontrol oleh tombol-tombol di sidebar
+    # Konten utama akan menyesuaikan berdasarkan st.session_state.sub_page
+    # yang dikontrol oleh tombol-tombol di sidebar.
     
-    # Hapus garis pemisah karena pilihan topik sudah tidak ada di sini
-    # st.markdown("---") 
-
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         icon = "👥" if st.session_state.sub_page == "Sosial" else "🌾"
         st.header(f"{icon} Scraping Berita - {st.session_state.sub_page}")
@@ -606,23 +602,29 @@ with st.sidebar:
             st.session_state.page = "Saran"
             st.rerun()
 
-    # --- [MODIFIKASI] Tombol radio diganti dengan tombol biasa di sini ---
+    # --- [MODIFIKASI] Logika tombol sidebar diubah total ---
     if st.session_state.page == "Scraping":
         st.markdown("---")
         st.header("Pilih Topik Data")
-        
-        if st.button("📊 Neraca", use_container_width=True):
-            st.session_state.sub_page = "Neraca"
-            st.rerun()
-        if st.button("👥 Sosial", use_container_width=True):
-            st.session_state.sub_page = "Sosial"
-            st.rerun()
-        if st.button("🌾 Produksi", use_container_width=True):
-            st.session_state.sub_page = "Produksi"
-            st.rerun()
-        if st.button("📰 Lainnya", use_container_width=True):
-            st.session_state.sub_page = "Lainnya"
-            st.rerun()
+
+        # Daftar semua topik dengan label, ikon, dan nama state
+        scraping_topics = {
+            "Neraca": "📊 Neraca",
+            "Sosial": "👥 Sosial",
+            "Produksi": "🌾 Produksi",
+            "Lainnya": "📰 Lainnya"
+        }
+
+        # Loop untuk membuat setiap tombol
+        for topic_name, topic_label in scraping_topics.items():
+            # Tentukan tipe tombol: 'primary' (biru) jika aktif, 'secondary' (abu-abu) jika tidak
+            is_active = (st.session_state.sub_page == topic_name)
+            button_type = "primary" if is_active else "secondary"
+            
+            # Buat tombol. Jika diklik, update state dan rerun
+            if st.button(topic_label, use_container_width=True, type=button_type):
+                st.session_state.sub_page = topic_name
+                st.rerun()
 
 
 page_functions = {"Home": show_home_page, "Panduan": show_panduan_page, "Scraping": show_scraping_page, "Dokumentasi": show_documentation_page, "Saran": show_saran_page}
