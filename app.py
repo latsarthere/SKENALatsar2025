@@ -54,6 +54,16 @@ custom_css = """
         color: white;
         border: 1px solid #AC2925;
     }
+    /* --- [MODIFIKASI] CSS untuk tombol scraping warna hijau --- */
+    .scraping-button button {
+        background-color: #28a745; /* Warna hijau */
+        color: white;
+        border: none;
+    }
+    .scraping-button button:hover {
+        background-color: #218838; /* Warna hijau lebih gelap saat hover */
+        color: white;
+    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -138,7 +148,7 @@ def ekstrak_info_artikel(driver, link_google, keyword):
         for kalimat in kalimat_list:
             if keyword.lower() in kalimat.lower():
                 ringkasan = kalimat.strip()
-                break
+                break 
 
         if not ringkasan and kalimat_list:
             ringkasan = kalimat_list[0].strip()
@@ -189,6 +199,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
+                    
                     if use_summary:
                         link_final, ringkasan, sumber_dari_url = ekstrak_info_artikel(driver, entry.link, keyword)
                     else:
@@ -218,8 +229,8 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = "N/A"
                         
                         new_data = {
-                            "Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword,
-                            "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str,
+                            "Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword, 
+                            "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str, 
                             "Sumber": sumber_final
                         }
                         if use_summary:
@@ -526,7 +537,7 @@ def show_scraping_page():
             st.dataframe(
                 hasil_df,
                 use_container_width=True,
-                height=500,
+                height=500, 
                 column_config=column_config
             )
             st.caption(f"Total {len(hasil_df)} berita ditemukan.")
@@ -603,6 +614,16 @@ with st.sidebar:
             st.session_state.page = "Home"
             st.rerun()
 
+    # --- [MODIFIKASI] Tombol Reboot Aplikasi ---
+    st.write("") # Memberi sedikit spasi
+    if st.button("🔄 Reboot Aplikasi", use_container_width=True, help="Klik untuk membersihkan cache dan memulai ulang aplikasi jika terjadi masalah."):
+        # Membersihkan cache data dan resource
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.success("Aplikasi sedang direboot...")
+        time.sleep(2) # Jeda singkat agar pesan terlihat
+        st.rerun()
+
     st.markdown("---")
     st.header("Menu Navigasi")
     if st.button("🏠 Home", use_container_width=True):
@@ -612,9 +633,13 @@ with st.sidebar:
         st.session_state.page = "Panduan"
         st.rerun()
     if st.session_state.logged_in:
+        # --- [MODIFIKASI] Bungkus tombol scraping dengan div untuk styling ---
+        st.markdown('<div class="scraping-button">', unsafe_allow_html=True)
         if st.button("⚙️ Scraping", use_container_width=True):
             st.session_state.page = "Scraping"
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         if st.button("🗂️ Dokumentasi", use_container_width=True):
             st.session_state.page = "Dokumentasi"
             st.rerun()
