@@ -331,12 +331,15 @@ def show_saran_page():
                 if not saran_valid: st.warning("Kolom saran tidak boleh kosong.")
 
 def show_scraping_page():
-    # --- [MODIFIKASI] ---
-    # Kode radio button sudah dipindahkan ke sidebar, jadi di sini kita hanya menampilkan judul.
+    # Judul halaman tetap di panel utama
     st.title(f"⚙️ Halaman Scraping Data")
-    st.markdown("---")
+    
+    # Konten utama halaman akan menyesuaikan berdasarkan pilihan di sidebar
+    # st.session_state.sub_page akan dikontrol oleh tombol-tombol di sidebar
+    
+    # Hapus garis pemisah karena pilihan topik sudah tidak ada di sini
+    # st.markdown("---") 
 
-    # Logika selanjutnya akan selalu mengacu pada st.session_state.sub_page yang sudah sinkron
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         icon = "👥" if st.session_state.sub_page == "Sosial" else "🌾"
         st.header(f"{icon} Scraping Berita - {st.session_state.sub_page}")
@@ -408,7 +411,7 @@ def show_scraping_page():
             }
             st.rerun()
 
-    else: # Neraca
+    else: # Neraca, Sosial, Produksi
         mode_ringkasan = st.radio(
             "Pilih Opsi Ringkasan:",
             ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"],
@@ -572,53 +575,59 @@ with st.sidebar:
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Login", use_container_width=True, type="primary"):
                 if username == "user7405" and password == "bps7405":
-                    st.session_state.logged_in = True; st.session_state.page = "Home"; st.rerun()
+                    st.session_state.logged_in = True
+                    st.session_state.page = "Home"
+                    st.rerun()
                 else:
                     st.warning("Username atau password salah.")
     else:
         st.success(f"Selamat datang, **user7405**!")
         if st.button("Logout", use_container_width=True):
-            st.session_state.logged_in = False; st.session_state.page = "Home"; st.rerun()
+            st.session_state.logged_in = False
+            st.session_state.page = "Home"
+            st.rerun()
 
-    st.markdown("---"); st.header("Menu Navigasi")
-    if st.button("🏠 Home", use_container_width=True): st.session_state.page = "Home"; st.rerun()
-    if st.button("📖 Panduan", use_container_width=True): st.session_state.page = "Panduan"; st.rerun()
+    st.markdown("---")
+    st.header("Menu Navigasi")
+    if st.button("🏠 Home", use_container_width=True): 
+        st.session_state.page = "Home"
+        st.rerun()
+    if st.button("📖 Panduan", use_container_width=True): 
+        st.session_state.page = "Panduan"
+        st.rerun()
     if st.session_state.logged_in:
-        if st.button("⚙️ Scraping", use_container_width=True): st.session_state.page = "Scraping"; st.rerun()
-        if st.button("🗂️ Dokumentasi", use_container_width=True): st.session_state.page = "Dokumentasi"; st.rerun()
-        if st.button("✍️ Saran", use_container_width=True): st.session_state.page = "Saran"; st.rerun()
+        if st.button("⚙️ Scraping", use_container_width=True): 
+            st.session_state.page = "Scraping"
+            st.rerun()
+        if st.button("🗂️ Dokumentasi", use_container_width=True): 
+            st.session_state.page = "Dokumentasi"
+            st.rerun()
+        if st.button("✍️ Saran", use_container_width=True): 
+            st.session_state.page = "Saran"
+            st.rerun()
 
-    # --- [MODIFIKASI] Tombol radio ditambahkan di sini ---
-    # Tampilkan pilihan topik hanya jika sedang di halaman Scraping
+    # --- [MODIFIKASI] Tombol radio diganti dengan tombol biasa di sini ---
     if st.session_state.page == "Scraping":
         st.markdown("---")
         st.header("Pilih Topik Data")
         
-        sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
-
-        # Fungsi callback untuk mensinkronkan state
-        def sync_sub_page_state():
-            st.session_state.sub_page = st.session_state.sub_page_radio_widget
-
-        # Tentukan indeks default
-        try:
-            default_index = sub_page_options.index(st.session_state.sub_page)
-        except (ValueError, KeyError):
-            default_index = 0
-
-        # Render widget radio di sidebar
-        st.radio(
-            "Topik Data:",
-            sub_page_options,
-            index=default_index,
-            key="sub_page_radio_widget",
-            on_change=sync_sub_page_state,
-            label_visibility="collapsed" # Sembunyikan label karena sudah ada header
-        )
+        if st.button("📊 Neraca", use_container_width=True):
+            st.session_state.sub_page = "Neraca"
+            st.rerun()
+        if st.button("👥 Sosial", use_container_width=True):
+            st.session_state.sub_page = "Sosial"
+            st.rerun()
+        if st.button("🌾 Produksi", use_container_width=True):
+            st.session_state.sub_page = "Produksi"
+            st.rerun()
+        if st.button("📰 Lainnya", use_container_width=True):
+            st.session_state.sub_page = "Lainnya"
+            st.rerun()
 
 
 page_functions = {"Home": show_home_page, "Panduan": show_panduan_page, "Scraping": show_scraping_page, "Dokumentasi": show_documentation_page, "Saran": show_saran_page}
 if st.session_state.page in page_functions and (st.session_state.page in ["Home", "Panduan"] or st.session_state.logged_in):
     page_functions[st.session_state.page]()
 else:
-    st.session_state.page = "Home"; st.rerun()
+    st.session_state.page = "Home"
+    st.rerun()
