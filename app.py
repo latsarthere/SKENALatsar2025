@@ -258,7 +258,10 @@ def show_home_page():
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
     st.header("Pilih Kategori Data")
     is_disabled = not st.session_state.get('logged_in', False)
+    
+    # --- [MODIFIKASI] Urutan kolom diubah di sini ---
     col1, col2, col3, col4 = st.columns(4, gap="large")
+
     with col1:
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
@@ -266,16 +269,16 @@ def show_home_page():
             st.session_state.page, st.session_state.sub_page = "Scraping", "Neraca"
             st.rerun()
     with col2:
-        st.subheader("🌾 Produksi")
-        st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
-        if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled):
-            st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"
-            st.rerun()
-    with col3:
         st.subheader("👥 Sosial")
         st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
         if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled):
             st.session_state.page, st.session_state.sub_page = "Scraping", "Sosial"
+            st.rerun()
+    with col3:
+        st.subheader("🌾 Produksi")
+        st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
+        if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled):
+            st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"
             st.rerun()
     with col4:
         st.subheader("📰 Lainnya")
