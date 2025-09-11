@@ -56,13 +56,43 @@ custom_css = """
     }
     /* CSS untuk tombol scraping warna hijau */
     .scraping-button button {
-        background-color: #28a745; /* Warna hijau */
+        background-color: #28a745;
         color: white;
         border: none;
     }
     .scraping-button button:hover {
-        background-color: #218838; /* Warna hijau lebih gelap saat hover */
+        background-color: #218838;
         color: white;
+    }
+
+    /* --- [MODIFIKASI] CSS untuk membuat st.radio terlihat seperti tabs --- */
+    div[data-testid="stRadio"] > div {
+        display: flex;
+        justify-content: stretch;
+        width: 100%;
+    }
+    div[data-testid="stRadio"] label {
+        background-color: #262730; /* Warna dasar untuk dark mode */
+        color: #FAFAFA;
+        padding: 8px 12px;
+        border: 1px solid #4F4F4F;
+        border-radius: 5px;
+        text-align: center;
+        flex-grow: 1;
+        margin: 0 2px;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+    }
+    /* Sembunyikan titik radio asli */
+    div[data-testid="stRadio"] input[type="radio"] {
+        display: none;
+    }
+    /* Style untuk radio button yang dipilih */
+    div[data-testid="stRadio"] input:checked + div {
+        background-color: #0073C4;
+        font-weight: bold;
+        color: white;
+        border-color: #0073C4;
     }
 </style>
 """
@@ -284,25 +314,29 @@ def show_home_page():
         st.subheader("📈 Neraca")
         st.write("Data mengenai neraca perdagangan, PDB, inflasi, dan ekonomi lainnya.")
         if st.button("Pilih Neraca", use_container_width=True, disabled=is_disabled):
-            st.session_state.page, st.session_state.sub_page = "Scraping", "Neraca"
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Neraca" # Simpan pilihan
             st.rerun()
     with col2:
         st.subheader("🌾 Produksi")
         st.write("Informasi seputar produksi tanaman pangan, perkebunan, dan pertanian.")
         if st.button("Pilih Produksi", use_container_width=True, disabled=is_disabled):
-            st.session_state.page, st.session_state.sub_page = "Scraping", "Produksi"
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Produksi" # Simpan pilihan
             st.rerun()
     with col3:
         st.subheader("👥 Sosial")
         st.write("Data terkait demografi, kemiskinan, pendidikan, dan kesehatan.")
         if st.button("Pilih Sosial", use_container_width=True, disabled=is_disabled):
-            st.session_state.page, st.session_state.sub_page = "Scraping", "Sosial"
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Sosial" # Simpan pilihan
             st.rerun()
     with col4:
         st.subheader("📰 Lainnya")
         st.write("Informasi seputar lainnya dapat dicari bagian ini.")
         if st.button("Pilih Lainnya", use_container_width=True, disabled=is_disabled):
-            st.session_state.page, st.session_state.sub_page = "Scraping", "Lainnya"
+            st.session_state.page = "Scraping"
+            st.session_state.sub_page = "Lainnya" # Simpan pilihan
             st.rerun()
 
 def show_panduan_page():
@@ -350,12 +384,23 @@ def show_saran_page():
 
 def show_scraping_page():
     st.title("⚙️ Halaman Scraping Data")
+    st.markdown("Pilih Topik Data:")
 
-    # --- [MODIFIKASI] Mengganti st.radio dengan st.tabs ---
-    tab_neraca, tab_sosial, tab_produksi, tab_lainnya = st.tabs([
-        "📊 Neraca", "👥 Sosial", "🌾 Produksi", "📑 Lainnya"
-    ])
-
+    # --- [MODIFIKASI] Menggunakan st.radio yang di-style seperti tabs ---
+    sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
+    # Atur pilihan default berdasarkan session_state dari homepage
+    default_index = sub_page_options.index(st.session_state.get('sub_page', 'Neraca'))
+    
+    selected_topic = st.radio(
+        "Pilih Topik Data:",
+        options=sub_page_options,
+        format_func=lambda x: f'{"📊" if x=="Neraca" else "👥" if x=="Sosial" else "🌾" if x=="Produksi" else "📑"} {x}',
+        index=default_index,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    st.markdown("---")
+    
     def validate_year(year_str):
         if not year_str.strip():
             st.warning("Tahun wajib diisi.")
@@ -368,10 +413,9 @@ def show_scraping_page():
             st.warning(f"Tahun tidak boleh kurang dari 2015.")
             return None
         return year_int
-
-    # --- Konten untuk Tab Neraca ---
-    with tab_neraca:
-        st.header(f"📊 Scraping Berita - Neraca")
+    
+    # --- Logika Tampilan Berdasarkan Pilihan Radio/Tabs ---
+    if selected_topic == "Neraca":
         with st.spinner("Memuat data kategori & sub-kategori..."):
             base_url = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
             df_kat = load_data_from_url(base_url, sheet_name='Sheet1_Kat')
@@ -381,7 +425,6 @@ def show_scraping_page():
             st.error("Gagal memuat data. Pastikan sheet 'Sheet1_Kat' dan 'Sheet1_SubKat' ada di Google Sheet.")
         else:
             st.success("✅ Data kategori & sub-kategori berhasil dimuat.")
-            
             st.subheader("Atur Parameter Scraping")
             tahun_input_str = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_neraca")
             triwulan_input = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_neraca")
@@ -408,7 +451,7 @@ def show_scraping_page():
                 if tahun_input:
                     df_proses = df_kat[kategori_terpilih] if mode_pencarian == "Kategori" else df_subkat[kategori_terpilih]
                     st.session_state.start_scraping = True
-                    st.session_state.sub_page = "Neraca" # Set sub_page untuk penamaan file
+                    st.session_state.sub_page = "Neraca"
                     st.session_state.scraping_params = {
                         'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input,
                         'start_date': start_date_input, 'end_date': end_date_input,
@@ -416,21 +459,15 @@ def show_scraping_page():
                     }
                     st.rerun()
 
-    # --- Konten untuk Tab Sosial ---
-    with tab_sosial:
-        st.header(f"👥 Scraping Berita - Sosial")
+    elif selected_topic == "Sosial":
         st.info(f"Fitur scraping untuk data **Sosial** sedang dalam pengembangan.")
         st.balloons()
 
-    # --- Konten untuk Tab Produksi ---
-    with tab_produksi:
-        st.header(f"🌾 Scraping Berita - Produksi")
+    elif selected_topic == "Produksi":
         st.info(f"Fitur scraping untuk data **Produksi** sedang dalam pengembangan.")
         st.balloons()
-
-    # --- Konten untuk Tab Lainnya ---
-    with tab_lainnya:
-        st.header("📑 Scraping Manual Berdasarkan Kata Kunci")
+        
+    elif selected_topic == "Lainnya":
         st.subheader("Atur Parameter Scraping")
         tahun_input_str_manual = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_manual")
         triwulan_input_manual = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_manual")
@@ -450,7 +487,7 @@ def show_scraping_page():
             if tahun_input and kata_kunci_manual.strip():
                 df_proses = pd.DataFrame({kata_kunci_manual: [kata_kunci_manual]})
                 st.session_state.start_scraping = True
-                st.session_state.sub_page = "Lainnya" # Set sub_page untuk penamaan file
+                st.session_state.sub_page = "Lainnya"
                 st.session_state.scraping_params = {
                     'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input_manual,
                     'start_date': start_date_input_manual, 'end_date': end_date_input_manual,
@@ -460,8 +497,6 @@ def show_scraping_page():
             elif not kata_kunci_manual.strip():
                  st.warning("Harap isi kata kunci terlebih dahulu.")
 
-    # --- Bagian ini (logika proses scraping) berada di luar Tabs ---
-    # --- Ia akan berjalan jika salah satu tombol "Mulai Scraping" di dalam tab ditekan ---
     if st.session_state.get('start_scraping'):
         params = st.session_state.scraping_params
         tanggal_awal, tanggal_akhir = get_rentang_tanggal(params['tahun'], params['triwulan'], params['start_date'], params['end_date'])
@@ -471,7 +506,6 @@ def show_scraping_page():
                 df_daerah = load_data_from_url("https://docs.google.com/spreadsheets/d/1Y2SbHlWBWwcxCdAhHiIkdQmcmq--NkGk/export?format=xlsx")
             if df_daerah is not None:
                 st.markdown("---")
-                
                 col_header, col_button = st.columns([3, 1])
                 with col_header:
                     st.header("Proses & Hasil Scraping")
@@ -494,7 +528,6 @@ def show_scraping_page():
                 
                 status_placeholder.empty()
                 keyword_placeholder.empty()
-                
                 st.session_state.scraping_result = {'df': hasil_df, 'params': params}
         
         del st.session_state.start_scraping
@@ -510,17 +543,13 @@ def show_scraping_page():
         
         if not hasil_df.empty:
             st.markdown("#### Ringkasan Hasil Ditemukan")
-            
             use_summary = (result['params']['mode_ringkasan'] == "Dengan Ringkasan (cukup lama)")
             column_config = {"Link": st.column_config.LinkColumn("Link", width="medium")}
             if use_summary:
                 column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
 
             st.dataframe(
-                hasil_df,
-                use_container_width=True,
-                height=500, 
-                column_config=column_config
+                hasil_df, use_container_width=True, height=500, column_config=column_config
             )
             st.caption(f"Total {len(hasil_df)} berita ditemukan.")
             st.write("")
@@ -533,7 +562,6 @@ def show_scraping_page():
                 df_to_excel.to_excel(writer, index=False, sheet_name="Hasil Scraping")
 
             file_bytes = output.getvalue()
-            
             params = result['params']
             now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             topic_str = st.session_state.get('sub_page', 'Data')
@@ -567,7 +595,6 @@ def show_scraping_page():
                 del st.session_state.scraping_result
             st.rerun()
 
-
 # --- NAVIGASI DAN LOGIKA UTAMA ---
 if "page" not in st.session_state:
     st.session_state.page = "Home"
@@ -597,14 +624,12 @@ with st.sidebar:
             st.session_state.page = "Home"
             st.rerun()
 
-    # Tombol Reboot Aplikasi
-    st.write("") # Memberi sedikit spasi
+    st.write("")
     if st.button("🔄 Reboot Aplikasi", use_container_width=True, help="Klik untuk membersihkan cache dan memulai ulang aplikasi jika terjadi masalah."):
-        # Membersihkan cache data dan resource
         st.cache_data.clear()
         st.cache_resource.clear()
         st.success("Aplikasi sedang direboot...")
-        time.sleep(2) # Jeda singkat agar pesan terlihat
+        time.sleep(2)
         st.rerun()
 
     st.markdown("---")
@@ -616,7 +641,6 @@ with st.sidebar:
         st.session_state.page = "Panduan"
         st.rerun()
     if st.session_state.logged_in:
-        # Bungkus tombol scraping dengan div untuk styling
         st.markdown('<div class="scraping-button">', unsafe_allow_html=True)
         if st.button("⚙️ Scraping", use_container_width=True):
             st.session_state.page = "Scraping"
