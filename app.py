@@ -69,52 +69,55 @@ custom_css = """
         color: white;
     }
 
-    /* --- [MODIFIKASI] CSS untuk UI yang lebih baik --- */
-
-    /* 1. Gaya Kartu untuk mengelompokkan elemen */
-    .card {
-        background-color: #FFFFFF;
-        border: 1px solid #E0E0E0;
-        border-radius: 10px;
-        padding: 25px;
-        margin-top: 15px;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.04);
-    }
-
-    /* 2. Gaya st.radio yang diseragamkan menjadi seperti tabs/segmented control */
+    /* --- [MODIFIKASI] CSS untuk st.radio agar tampil seperti tabs dan cocok dark mode --- */
     div[data-testid="stRadio"] > div {
         display: flex;
         justify-content: stretch;
         width: 100%;
+        margin-bottom: 20px; /* Tambahkan sedikit jarak di bawah tabs */
     }
     div[data-testid="stRadio"] label {
-        background-color: #F0F2F6;
-        color: #31333F;
+        background-color: #262730; /* Latar belakang non-aktif untuk dark mode */
+        color: #FAFAFA; /* Warna teks non-aktif untuk dark mode */
         padding: 8px 12px;
-        border: 1px solid #D1D1D1;
+        border: 1px solid #4F4F4F; /* Border untuk dark mode */
         border-radius: 5px;
         text-align: center;
         flex-grow: 1;
         margin: 0 2px;
         cursor: pointer;
         transition: all 0.2s ease-in-out;
-        -webkit-user-select: none; /* Safari */
-        -ms-user-select: none; /* IE 10+ */
-        user-select: none; /* Standard syntax */
+        -webkit-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
     }
-    /* 3. Sembunyikan titik radio asli dengan lebih baik */
     div[data-testid="stRadio"] input[type="radio"] {
         opacity: 0;
         position: fixed;
         width: 0;
     }
-    /* 4. Style untuk radio button yang dipilih */
     div[data-testid="stRadio"] input:checked + div {
         background-color: #0073C4;
         font-weight: 600;
         color: white;
         border-color: #0073C4;
+    }
+    /* Style untuk dropdown/selectbox agar terlihat lebih baik di dark mode */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        background-color: #262730;
+        color: #FAFAFA;
+        border: 1px solid #4F4F4F;
+        border-radius: 5px;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] div[data-baseweb="popover"] {
+        background-color: #262730;
+        color: #FAFAFA;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] div[role="option"] {
+        color: #FAFAFA !important;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] div[role="option"]:hover {
+        background-color: #005A9E !important;
     }
 </style>
 """
@@ -405,7 +408,6 @@ def show_scraping_page():
         else:
             st.success("✅ Data kategori & sub-kategori berhasil dimuat.")
             
-            st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("1. Atur Periode Scraping")
             tahun_input_str = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_neraca")
             triwulan_input = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_neraca")
@@ -414,9 +416,7 @@ def show_scraping_page():
                 col1, col2 = st.columns(2)
                 start_date_input = col1.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="start_date_neraca")
                 end_date_input = col2.date_input("Tanggal Akhir", date.today(), key="end_date_neraca")
-            st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("2. Atur Mode Pencarian")
             mode_ringkasan = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_neraca")
             mode_pencarian = st.radio("Pilih Mode Pencarian:", ["Kategori", "Sub Kategori"], horizontal=True, key="pencarian_neraca")
@@ -426,7 +426,6 @@ def show_scraping_page():
                 kategori_terpilih = st.multiselect('Pilih Kategori yang diinginkan:', df_kat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 kategori.", key='kategori_multiselect_neraca')
             elif mode_pencarian == 'Sub Kategori':
                 kategori_terpilih = st.multiselect('Pilih Sub Kategori yang diinginkan:', df_subkat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 sub-kategori.", key='subkategori_multiselect_neraca')
-            st.markdown('</div>', unsafe_allow_html=True)
             
             is_disabled = (triwulan_input == "--Pilih Triwulan--" or not kategori_terpilih)
             if st.button("🚀 Mulai Scraping Neraca", use_container_width=True, type="primary", disabled=is_disabled):
@@ -439,7 +438,6 @@ def show_scraping_page():
                     st.rerun()
     
     elif selected_topic == "Lainnya":
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("1. Atur Parameter")
         tahun_input_str_manual = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_manual")
         triwulan_input_manual = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_manual")
@@ -451,7 +449,6 @@ def show_scraping_page():
         mode_ringkasan_manual = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_manual")
         st.subheader("2. Masukkan Kata Kunci")
         kata_kunci_manual = st.text_input("Masukkan kata kunci pencarian:", placeholder="Contoh: Bantuan Pangan", key="keyword_manual")
-        st.markdown('</div>', unsafe_allow_html=True)
         
         is_disabled_manual = (triwulan_input_manual == "--Pilih Triwulan--")
         if st.button("🚀 Mulai Scraping Manual", use_container_width=True, type="primary", disabled=is_disabled_manual):
