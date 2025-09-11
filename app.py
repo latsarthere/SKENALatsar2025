@@ -318,12 +318,35 @@ def show_saran_page():
                 if not nama_valid: st.warning("Nama wajib diisi dan harus lebih dari 5 karakter.")
                 if not saran_valid: st.warning("Kolom saran tidak boleh kosong.")
 
+# --- [MODIFIKASI] Bagian ini yang diubah ---
 def show_scraping_page():
     st.title(f"⚙️ Halaman Scraping Data")
     sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
-    st.session_state.sub_page = st.radio("Pilih Topik Data:", sub_page_options, horizontal=True, key="sub_page_radio")
+
+    # Tentukan indeks default untuk radio button berdasarkan nilai di session_state
+    # yang diatur dari halaman Home.
+    try:
+        # Cari index dari sub_page yang sudah ada di session state
+        default_index = sub_page_options.index(st.session_state.sub_page)
+    except (ValueError, KeyError):
+        # Jika tidak ada atau nilainya tidak valid, default ke pilihan pertama (Neraca)
+        default_index = 0
+
+    # Tampilkan radio button dengan pilihan default yang sudah ditentukan.
+    # Hasil pilihan pengguna akan langsung memperbarui st.session_state.sub_page.
+    selected_option = st.radio(
+        "Pilih Topik Data:",
+        sub_page_options,
+        horizontal=True,
+        index=default_index, # Ini kunci perbaikannya
+        key="sub_page_radio"
+    )
+    # Sinkronkan kembali state utama jika pengguna memilih opsi lain di radio button
+    st.session_state.sub_page = selected_option
+    
     st.markdown("---")
 
+    # --- Sisa kode di fungsi ini tetap sama ---
     if st.session_state.sub_page in ["Sosial", "Produksi"]:
         icon = "👥" if st.session_state.sub_page == "Sosial" else "🌾"
         st.header(f"{icon} Scraping Berita - {st.session_state.sub_page}")
@@ -483,7 +506,7 @@ def show_scraping_page():
         
         del st.session_state.start_scraping
         if 'stop_scraping' in st.session_state: 
-             del st.session_state.stop_scraping
+            del st.session_state.stop_scraping
         st.rerun()
 
     if st.session_state.get('scraping_result'):
