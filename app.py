@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from pygooglenews import GoogleNews
 from urllib.parse import urlparse
 import re
+import base64  # Impor untuk encoding PDF
 
 # --- Impor untuk integrasi Google Sheets ---
 import gspread
@@ -27,11 +28,11 @@ st.set_page_config(
 # --- TEMA WARNA & GAYA ---
 custom_css = """
 <style>
-    .block-container { 
-        padding-top: 2rem; 
+    .block-container {
+        padding-top: 2rem;
         padding-bottom: 2rem;
     }
-    h1, h2, h3, h4, h5 { } 
+    h1, h2, h3, h4, h5 { }
     div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stForm"] > form > div > button {
         background-color: #0073C4;
@@ -47,7 +48,7 @@ custom_css = """
     .stAlert[data-baseweb="notification"][data-testid*="info"] { border-left: 5px solid #0073C4; }
     .stAlert[data-baseweb="notification"][data-testid*="success"] { border-left: 5px solid #65B32E; }
     .stAlert[data-baseweb="notification"][data-testid*="warning"] { border-left: 5px solid #F17822; }
-    
+
     .stop-button button {
         background-color: #D9534F;
         color: white;
@@ -58,7 +59,7 @@ custom_css = """
         color: white;
         border: 1px solid #AC2925;
     }
-    
+
     .scraping-button button {
         background-color: #28a745;
         color: white;
@@ -142,7 +143,7 @@ def ekstrak_info_artikel(driver, link_google, keyword):
         sumber_dari_url = parsed_uri.netloc.replace('www.', '')
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
+
         teks_artikel = " ".join(p.get_text(strip=True) for p in soup.find_all('p'))
         if not teks_artikel:
             return url_final, "", sumber_dari_url
@@ -153,7 +154,7 @@ def ekstrak_info_artikel(driver, link_google, keyword):
         for kalimat in kalimat_list:
             if keyword.lower() in kalimat.lower():
                 ringkasan = kalimat.strip()
-                break 
+                break
 
         if not ringkasan and kalimat_list:
             ringkasan = kalimat_list[0].strip()
@@ -165,13 +166,13 @@ def ekstrak_info_artikel(driver, link_google, keyword):
 def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_daerah_df, start_time, status_placeholder, keyword_placeholder, table_placeholder, mode_ringkasan):
     use_summary = (mode_ringkasan == "Dengan Ringkasan (cukup lama)")
     driver = get_selenium_driver() if use_summary else None
-    
+
     kata_kunci_lapus_dict = {c: kata_kunci_lapus_df[c].dropna().astype(str).str.strip().tolist() for c in kata_kunci_lapus_df.columns}
     nama_daerah = "Konawe Selatan"
     kecamatan_list = kata_kunci_daerah_df[nama_daerah].dropna().astype(str).str.strip().tolist()
     lokasi_filter = [nama_daerah.lower()] + [kec.lower() for kec in kecamatan_list]
     gn = GoogleNews(lang='id', country='ID')
-    
+
     kolom_tabel = ["Nomor", "Kategori", "Kata Kunci", "Judul", "Link", "Tanggal", "Sumber"]
     if use_summary:
         kolom_tabel.append("Ringkasan")
@@ -179,7 +180,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
     semua_hasil = []
     df_live = pd.DataFrame(columns=kolom_tabel)
     total_kategori = len(kata_kunci_lapus_dict)
-    
+
     scraping_stopped = False
     for kategori_ke, (kategori, kata_kunci_list) in enumerate(kata_kunci_lapus_dict.items(), 1):
         for keyword_raw in kata_kunci_list:
@@ -187,18 +188,18 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                 status_placeholder.warning("Proses dihentikan oleh pengguna.")
                 scraping_stopped = True
                 break
-            
+
             elapsed_time = time.time() - start_time
             menit, detik = divmod(int(elapsed_time), 60)
             status_placeholder.info(f"⏳ Proses Berjalan: {menit}m {detik}d | 📁 Kategori {kategori_ke}/{total_kategori}: {kategori}")
-            
+
             if pd.isna(keyword_raw): continue
             keyword = str(keyword_raw).strip()
             if not keyword: continue
-            
+
             keyword_placeholder.text(f"  ➡️ 🔍 Mencari: '{keyword}' di '{nama_daerah}'")
             search_query = f'"{keyword}" "{nama_daerah}"'
-            
+
             try:
                 search_results = gn.search(search_query, from_=tanggal_awal, to_=tanggal_akhir)
                 for entry in search_results['entries']:
@@ -208,7 +209,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                         link_final, ringkasan, sumber_dari_url = entry.link, "", (entry.source.title if entry.source else "")
 
                     if not link_final or any(d['Link'] == link_final for d in semua_hasil): continue
-                    
+
                     judul_asli = entry.title
                     judul_bersih, sumber_final = judul_asli, sumber_dari_url
                     if ' - ' in judul_asli:
@@ -226,10 +227,10 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             tanggal_str = tanggal_dt.strftime('%d-%m-%Y')
                         except (ValueError, TypeError):
                             tanggal_str = "N/A"
-                        
+
                         new_data = {"Nomor": len(semua_hasil) + 1, "Kategori": kategori, "Kata Kunci": keyword, "Judul": judul_bersih, "Link": link_final, "Tanggal": tanggal_str, "Sumber": sumber_final}
                         if use_summary: new_data["Ringkasan"] = ringkasan
-                        
+
                         semua_hasil.append(new_data)
                         new_row_df = pd.DataFrame([new_data], columns=kolom_tabel)
                         df_live = pd.concat([df_live, new_row_df], ignore_index=True)
@@ -238,7 +239,7 @@ def start_scraping(tanggal_awal, tanggal_akhir, kata_kunci_lapus_df, kata_kunci_
                             st.markdown("### Hasil Scraping (Live)")
                             column_config = {"Link": st.column_config.LinkColumn("Link", width="medium")}
                             if use_summary: column_config["Ringkasan"] = st.column_config.TextColumn("Ringkasan Penting", width="large")
-                            
+
                             st.dataframe(df_live, use_container_width=True, height=500, column_config=column_config)
                             st.caption(f"Total berita ditemukan: {len(df_live)}")
             except Exception as e:
@@ -258,7 +259,7 @@ def show_home_page():
         st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping, Dokumentasi, dan Saran.")
     st.header("Pilih Kategori Data")
     is_disabled = not st.session_state.get('logged_in', False)
-    
+
     col1, col2, col3, col4 = st.columns(4, gap="large")
 
     with col1:
@@ -290,6 +291,15 @@ def show_panduan_page():
     st.title("📖 Panduan Pengguna")
     st.markdown("---")
     st.markdown("Selamat datang di **SKENA (Sistem Scraping Fenomena Konawe Selatan)**.\n\nAplikasi ini dirancang untuk membantu dalam pengumpulan data berita online yang relevan dengan Kabupaten Konawe Selatan. Dengan memanfaatkan teknologi web scraping, SKENA dapat secara otomatis mencari, mengumpulkan, dan menyajikan data dari berbagai sumber berita di internet. Silahkan membaca Buku Panduang Penggunaan SKENA sebelum menggunakannya!")
+
+    # --- [MODIFIKASI] Menambahkan PDF Viewer ---
+    pdf_embed_url = "https://drive.google.com/file/d/1uLaiGXTMLgqNI3gib9KVhhIP4QqK_ymn/preview"
+    st.components.v1.html(
+        f'<iframe src="{pdf_embed_url}" width="100%" height="800" style="border:1px solid #ddd; border-radius: 8px;"></iframe>',
+        height=820
+    )
+    # --- Akhir Modifikasi ---
+
     if not st.session_state.get('logged_in', False):
         st.markdown("Silakan **Login** melalui sidebar untuk mengakses fitur utama.")
 
@@ -324,19 +334,19 @@ def show_saran_page():
 
 def show_scraping_page():
     st.title("⚙️ Halaman Scraping Data")
-    
+
     sub_page_options = ["Neraca", "Sosial", "Produksi", "Lainnya"]
     default_index = sub_page_options.index(st.session_state.get('sub_page', 'Neraca'))
-    
+
     selected_topic = st.radio(
-        "Pilih Topik Data:", 
+        "Pilih Topik Data:",
         options=sub_page_options,
         format_func=lambda x: f'{"📊" if x=="Neraca" else "👥" if x=="Sosial" else "🌾" if x=="Produksi" else "📑"} {x}',
-        index=default_index, 
+        index=default_index,
         horizontal=True,
     )
     st.markdown("---")
-    
+
     def validate_year(year_str):
         if not year_str.strip():
             st.warning("Tahun wajib diisi."); return None
@@ -346,12 +356,12 @@ def show_scraping_page():
         if year_int < 2015:
             st.warning(f"Tahun tidak boleh kurang dari 2015."); return None
         return year_int
-    
+
     if selected_topic in ["Sosial", "Produksi"]:
         icon = "👥" if selected_topic == "Sosial" else "🌾"
         st.info(f"Fitur scraping untuk data **{selected_topic}** sedang dalam pengembangan.")
         st.balloons()
-    
+
     elif selected_topic == "Neraca":
         with st.spinner("Memuat data kategori & sub-kategori..."):
             base_url = "https://docs.google.com/spreadsheets/d/19FRmYvDvjhCGL3vDuOLJF54u7U7hnfic/export?format=xlsx"
@@ -361,10 +371,10 @@ def show_scraping_page():
             st.error("Gagal memuat data. Pastikan sheet 'Sheet1_Kat' dan 'Sheet1_SubKat' ada di Google Sheet.")
         else:
             st.success("✅ Data kategori & sub-kategori berhasil dimuat.")
-            
+
             # --- [MODIFIKASI] Mengganti subjudul bernomor ---
             st.subheader("Atur Parameter Scraping")
-            
+
             tahun_input_str = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_neraca")
             triwulan_input = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_neraca")
             start_date_input, end_date_input = None, None
@@ -372,16 +382,16 @@ def show_scraping_page():
                 col1, col2 = st.columns(2)
                 start_date_input = col1.date_input("Tanggal Awal", date.today() - timedelta(days=30), key="start_date_neraca")
                 end_date_input = col2.date_input("Tanggal Akhir", date.today(), key="end_date_neraca")
-            
+
             mode_ringkasan = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_neraca")
             mode_pencarian = st.radio("Pilih Mode Pencarian:", ["Kategori", "Sub Kategori"], horizontal=True, key="pencarian_neraca")
-            
+
             kategori_terpilih = []
             if mode_pencarian == 'Kategori':
                 kategori_terpilih = st.multiselect('Pilih Kategori yang diinginkan:', df_kat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 kategori.", key='kategori_multiselect_neraca')
             elif mode_pencarian == 'Sub Kategori':
                 kategori_terpilih = st.multiselect('Pilih Sub Kategori yang diinginkan:', df_subkat.columns.tolist(), max_selections=3, help="Anda dapat memilih maksimal 3 sub-kategori.", key='subkategori_multiselect_neraca')
-            
+
             is_disabled = (triwulan_input == "--Pilih Triwulan--" or not kategori_terpilih)
             if st.button("🚀 Mulai Scraping Neraca", use_container_width=True, type="primary", disabled=is_disabled):
                 tahun_input = validate_year(tahun_input_str)
@@ -391,11 +401,11 @@ def show_scraping_page():
                     st.session_state.sub_page = "Neraca"
                     st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input, 'start_date': start_date_input, 'end_date': end_date_input, 'mode_ringkasan': mode_ringkasan}
                     st.rerun()
-    
+
     elif selected_topic == "Lainnya":
         # --- [MODIFIKASI] Mengganti subjudul bernomor ---
         st.subheader("Atur Parameter Scraping")
-        
+
         tahun_input_str_manual = st.text_input("Masukkan Tahun:", placeholder="Contoh: 2023", max_chars=4, key="tahun_manual")
         triwulan_input_manual = st.selectbox("Pilih Triwulan:", ["--Pilih Triwulan--", "Triwulan 1", "Triwulan 2", "Triwulan 3", "Triwulan 4", "Tanggal Custom"], key="triwulan_manual")
         start_date_input_manual, end_date_input_manual = None, None
@@ -405,7 +415,7 @@ def show_scraping_page():
             end_date_input_manual = col2.date_input("Tanggal Akhir", date.today(), key="end_date_manual")
         mode_ringkasan_manual = st.radio("Pilih Opsi Ringkasan:", ["Dengan Ringkasan (cukup lama)", "Tanpa Ringkasan (lebih cepat)"], horizontal=True, key="ringkasan_manual")
         kata_kunci_manual = st.text_input("Masukkan kata kunci pencarian:", placeholder="Contoh: Bantuan Pangan", key="keyword_manual")
-        
+
         is_disabled_manual = (triwulan_input_manual == "--Pilih Triwulan--")
         if st.button("🚀 Mulai Scraping Manual", use_container_width=True, type="primary", disabled=is_disabled_manual):
             tahun_input = validate_year(tahun_input_str_manual)
@@ -416,7 +426,7 @@ def show_scraping_page():
                 st.session_state.scraping_params = {'df': df_proses, 'tahun': tahun_input, 'triwulan': triwulan_input_manual, 'start_date': start_date_input_manual, 'end_date': end_date_input_manual, 'mode_ringkasan': mode_ringkasan_manual}
                 st.rerun()
             elif not kata_kunci_manual.strip():
-                 st.warning("Harap isi kata kunci terlebih dahulu.")
+                   st.warning("Harap isi kata kunci terlebih dahulu.")
 
     if st.session_state.get('start_scraping'):
         params = st.session_state.scraping_params
