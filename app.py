@@ -69,6 +69,16 @@ custom_css = """
         background-color: #218838;
         color: white;
     }
+
+    /* --- CSS untuk menyembunyikan ikon GitHub dan tulisan Fork --- */
+    .css-1jc7ptx, .css-1dp5vir, .css-1oe5zby { /* Selector umum untuk elemen terkait */
+        display: none !important;
+    }
+    .st-emotion-cache-gftqgq { /* Selector spesifik untuk tombol 'Fork' */
+        visibility: hidden;
+        height: 0px;
+    }
+    /* Anda mungkin perlu menyesuaikan selector ini jika versi Streamlit berubah */
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
