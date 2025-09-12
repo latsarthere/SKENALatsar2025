@@ -253,9 +253,9 @@ def show_home_page():
         col1, col2, col3 = st.columns([1, 3, 1])
         with col2: st.image("logo skena full.png", use_container_width=True)
     st.markdown("---")
-    st.markdown("""<div style="text-align: center;"><p>merupakan <strong>alat bantu</strong> Badan Pusat Statistik (BPS) Kabupaten Konawe Selatan dalam melakukan <strong>pencarian fenomena</strong> ekonomi, sosial, maupun lkata kunci lainnya. Fenomena yang ditangkap berupa <strong>berita online tentang Kabupaten Konawe Selatan</strong> yang ditangkap melalui Google News.</p><p><em>Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <strong>Panduan</strong> terlebih dahulu.</em></p></div>""", unsafe_allow_html=True)
+    st.markdown("""<div style="text-align: center;"><p><strong>Sistem Scraping Fenomena Konawe Selatan (SKENA)</strong>merupakan <strong>alat bantu</strong> Badan Pusat Statistik (BPS) Kabupaten Konawe Selatan dalam melakukan <strong>pencarian fenomena</strong> ekonomi, sosial, maupun lkata kunci lainnya. Fenomena yang ditangkap berupa <strong>berita online tentang Kabupaten Konawe Selatan</strong> yang ditangkap melalui Google News.</p><p><em>Sebelum mengakses fitur utama, sangat disarankan untuk membaca bagian <strong>Panduan</strong> terlebih dahulu.</em></p></div>""", unsafe_allow_html=True)
     if not st.session_state.get('logged_in', False):
-        st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping dan Dokumentasi.")
+        st.info("Silakan **Login** melalui sidebar untuk menggunakan menu Scraping, Dokumentasi, dan Saran.")
     st.header("Pilih Kategori Data")
     is_disabled = not st.session_state.get('logged_in', False)
     
